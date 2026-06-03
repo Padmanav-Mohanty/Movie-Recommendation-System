@@ -1,187 +1,151 @@
-"""
-Ranking and rating-prediction metrics for recommendation systems.
-"""
-
 import numpy as np
 import pandas as pd
 from typing import List, Dict
 
 
-# ── Rating-prediction metrics ─────────────────────────────────────────────────
-
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Root Mean Squared Error."""
-    return float(np.sqrt(np.mean((np.asarray(y_true) - np.asarray(y_pred)) ** 2)))
+    return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
 
 def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """Mean Absolute Error."""
-    return float(np.mean(np.abs(np.asarray(y_true) - np.asarray(y_pred))))
+    return float(np.mean(np.abs(y_true - y_pred)))
 
 
-# ── Ranking metrics ───────────────────────────────────────────────────────────
-
-def precision_at_k(recommended: List[int], relevant: set, k: int) -> float:
-    """Fraction of top-K recommendations that are relevant."""
-    top_k = recommended[:k]
-    hits  = sum(1 for item in top_k if item in relevant)
+def precision_at_k(recommended: List[int],
+                   relevant: List[int], k: int) -> float:
+    rec_k = recommended[:k]
+    hits  = len(set(rec_k) & set(relevant))
     return hits / k if k > 0 else 0.0
 
 
-def recall_at_k(recommended: List[int], relevant: set, k: int) -> float:
-    """Fraction of relevant items that appear in top-K."""
-    if not relevant:
-        return 0.0
-    top_k = recommended[:k]
-    hits  = sum(1 for item in top_k if item in relevant)
-    return hits / len(relevant)
+def recall_at_k(recommended: List[int],
+                relevant: List[int], k: int) -> float:
+    rec_k = recommended[:k]
+    hits  = len(set(rec_k) & set(relevant))
+    return hits / len(relevant) if relevant else 0.0
 
 
-def average_precision_at_k(recommended: List[int], relevant: set, k: int) -> float:
-    """Average Precision@K (area under precision-recall curve up to K)."""
-    if not relevant:
-        return 0.0
-    hits, score = 0, 0.0
-    for i, item in enumerate(recommended[:k]):
-        if item in relevant:
+def ndcg_at_k(recommended: List[int],
+              relevant: List[int], k: int) -> float:
+    rec_k = recommended[:k]
+    dcg   = sum(
+        1 / np.log2(i + 2)
+        for i, item in enumerate(rec_k)
+        if item in set(relevant)
+    )
+    idcg  = sum(1 / np.log2(i + 2) for i in range(min(len(relevant), k)))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+def average_precision(recommended: List[int],
+                      relevant: List[int]) -> float:
+    relevant_set = set(relevant)
+    hits, score  = 0, 0.0
+    for i, item in enumerate(recommended):
+        if item in relevant_set:
             hits  += 1
             score += hits / (i + 1)
-    return score / min(len(relevant), k)
+    return score / len(relevant) if relevant else 0.0
 
 
-def ndcg_at_k(recommended: List[int], relevant: set, k: int) -> float:
+def mean_average_precision(recommendations: Dict[int, List[int]],
+                           ground_truth:    Dict[int, List[int]]) -> float:
+    return float(np.mean([
+        average_precision(recommendations.get(u, []), ground_truth.get(u, []))
+        for u in ground_truth
+    ]))
+
+
+def mrr(recommendations: Dict[int, List[int]],
+        ground_truth:    Dict[int, List[int]]) -> float:
+    rr_scores = []
+    for u, relevant in ground_truth.items():
+        relevant_set = set(relevant)
+        rr = 0.0
+        for i, item in enumerate(recommendations.get(u, [])):
+            if item in relevant_set:
+                rr = 1 / (i + 1)
+                break
+        rr_scores.append(rr)
+    return float(np.mean(rr_scores))
+
+
+def evaluate_ranking(recommendations: Dict[int, List[int]],
+                     ground_truth:    Dict[int, List[int]],
+                     k_values: List[int] = [5, 10, 20]) -> pd.DataFrame:
     """
-    Normalized Discounted Cumulative Gain @ K.
-    Assumes binary relevance (item is relevant or not).
+    Full ranking evaluation across multiple K values.
+    Returns a DataFrame with Precision, Recall, NDCG per K.
     """
-    def dcg(items):
-        return sum(
-            (1.0 / np.log2(i + 2))
-            for i, item in enumerate(items)
-            if item in relevant
-        )
-
-    top_k = recommended[:k]
-    ideal = sorted(relevant)[:k]           # best possible ordering
-    idcg  = dcg(ideal)
-    if idcg == 0:
-        return 0.0
-    return dcg(top_k) / idcg
-
-
-def hit_rate_at_k(recommended: List[int], relevant: set, k: int) -> float:
-    """1 if at least one relevant item is in top-K, else 0."""
-    return float(any(item in relevant for item in recommended[:k]))
-
-
-def mrr_at_k(recommended: List[int], relevant: set, k: int) -> float:
-    """Reciprocal rank of the first relevant item in top-K."""
-    for i, item in enumerate(recommended[:k]):
-        if item in relevant:
-            return 1.0 / (i + 1)
-    return 0.0
-
-
-# ── Aggregate evaluation ──────────────────────────────────────────────────────
-
-def evaluate_recommendations(
-    recommendations: Dict[int, List[int]],
-    ground_truth:    Dict[int, set],
-    k_values:        List[int] = None,
-) -> pd.DataFrame:
-    """
-    Compute ranking metrics for every user across multiple K values.
-
-    Parameters
-    ----------
-    recommendations : {user_idx: [ordered list of movie_idx]}
-    ground_truth    : {user_idx: {set of relevant movie_idx}}
-    k_values        : list of cutoffs, e.g. [5, 10, 20]
-
-    Returns
-    -------
-    pd.DataFrame with one row per K, columns:
-        precision, recall, ndcg, hit_rate, map, mrr
-    """
-    if k_values is None:
-        from config import TOP_K
-        k_values = TOP_K
-
-    rows = []
+    results = []
     for k in k_values:
-        metrics_per_user = []
-        for user_idx, recs in recommendations.items():
-            relevant = ground_truth.get(user_idx, set())
-            if not relevant:
-                continue
-            metrics_per_user.append({
-                "precision": precision_at_k(recs, relevant, k),
-                "recall":    recall_at_k(recs, relevant, k),
-                "ndcg":      ndcg_at_k(recs, relevant, k),
-                "hit_rate":  hit_rate_at_k(recs, relevant, k),
-                "ap":        average_precision_at_k(recs, relevant, k),
-                "mrr":       mrr_at_k(recs, relevant, k),
-            })
-
-        if not metrics_per_user:
-            continue
-
-        agg = pd.DataFrame(metrics_per_user).mean()
-        rows.append({
-            "K":         k,
-            "Precision": agg["precision"],
-            "Recall":    agg["recall"],
-            "NDCG":      agg["ndcg"],
-            "HitRate":   agg["hit_rate"],
-            "MAP":       agg["ap"],
-            "MRR":       agg["mrr"],
-            "n_users":   len(metrics_per_user),
+        p_scores, r_scores, n_scores = [], [], []
+        for u, relevant in ground_truth.items():
+            recs = recommendations.get(u, [])
+            p_scores.append(precision_at_k(recs, relevant, k))
+            r_scores.append(recall_at_k(recs, relevant, k))
+            n_scores.append(ndcg_at_k(recs, relevant, k))
+        results.append({
+            "K":           k,
+            "Precision@K": np.mean(p_scores),
+            "Recall@K":    np.mean(r_scores),
+            "NDCG@K":      np.mean(n_scores),
         })
 
-    return pd.DataFrame(rows).set_index("K")
+    df = pd.DataFrame(results).set_index("K")
+    df["MAP"]  = mean_average_precision(recommendations, ground_truth)
+    df["MRR"]  = mrr(recommendations, ground_truth)
+    return df
 
 
-def build_ground_truth(
-    test_df: pd.DataFrame,
-    min_rating: float = 3.5,
-) -> Dict[int, set]:
-    """
-    Build a ground-truth dict from test split.
-    A movie is 'relevant' if the user gave it >= min_rating.
-    """
-    gt = (
-        test_df[test_df["rating"] >= min_rating]
+if __name__ == "__main__":
+    from config import SPLITS_DIR, MODELS_DIR, PROCESSED_DIR
+    from src.models.matrix_factorization import MatrixFactorization
+    import pickle
+
+    print("Loading test set and model...")
+    test  = pd.read_parquet(SPLITS_DIR / "test.parquet")
+    train = pd.read_parquet(SPLITS_DIR / "train.parquet")
+
+    with open(MODELS_DIR / "svd_model.pkl", "rb") as f:
+        model = pickle.load(f)
+
+    # Build ground truth — items rated >= 4.0 are "relevant"
+    ground_truth = (
+        test[test["rating"] >= 4.0]
         .groupby("user_idx")["movie_idx"]
-        .apply(set)
+        .apply(list)
         .to_dict()
     )
-    return gt
 
+    # Generate recommendations for users in ground truth
+    print(f"Evaluating on {len(ground_truth)} users...")
+    recommendations = {}
+    seen_per_user   = train.groupby("user_idx")["movie_idx"].apply(list).to_dict()
 
-def coverage_at_k(
-    recommendations: Dict[int, List[int]],
-    n_items: int,
-    k: int = 10,
-) -> float:
-    """Catalogue coverage: fraction of items that appear in any top-K list."""
-    seen = set()
-    for recs in recommendations.values():
-        seen.update(recs[:k])
-    return len(seen) / n_items if n_items > 0 else 0.0
+    for i, user_idx in enumerate(list(ground_truth.keys())[:500]):
+        seen = seen_per_user.get(user_idx, [])
+        recommendations[user_idx] = model.recommend(
+            user_idx=user_idx, top_k=20, seen_movie_idxs=seen
+        )
+        if (i + 1) % 100 == 0:
+            print(f"  {i+1}/500 users done")
 
+    # Rating prediction metrics
+    known_users  = set(train["user_idx"])
+    known_movies = set(train["movie_idx"])
+    test_filtered = test[
+        test["user_idx"].isin(known_users) &
+        test["movie_idx"].isin(known_movies)
+    ].sample(5000, random_state=42)
 
-def novelty_at_k(
-    recommendations: Dict[int, List[int]],
-    item_popularity: Dict[int, float],
-    k: int = 10,
-) -> float:
-    """
-    Mean self-information (novelty) of recommendations.
-    item_popularity maps movie_idx → probability of being rated.
-    """
-    scores = []
-    for recs in recommendations.values():
-        for item in recs[:k]:
-            p = item_popularity.get(item, 1e-9)
-            scores.append(-np.log2(p + 1e-9))
-    return float(np.mean(scores)) if scores else 0.0
+    preds  = model.predict_batch(test_filtered)
+    y_true = test_filtered["rating"].values
+
+    print(f"\nRating Prediction (SVD) on test set")
+    print(f"  RMSE : {rmse(y_true, preds):.4f}")
+    print(f"  MAE  : {mae(y_true, preds):.4f}")
+
+    print(f"\nRanking Metrics (SVD) @ top-500 users")
+    ranking_df = evaluate_ranking(recommendations, ground_truth)
+    print(ranking_df.to_string())
