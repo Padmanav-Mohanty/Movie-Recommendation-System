@@ -147,7 +147,7 @@ class Trainer:
         self.model     = model.to(self.device)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, patience=2, factor=0.5, verbose=True
+            self.optimizer, patience=2, factor=0.5
         )
         self.criterion = nn.MSELoss()
         print(f"Training on: {self.device}")
