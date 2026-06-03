@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from pathlib import Path
 from config import (
     MIN_USER_RATINGS, MIN_MOVIE_RATINGS,
     TEST_SIZE, RANDOM_SEED, PROCESSED_DIR, SPLITS_DIR
@@ -8,27 +8,26 @@ from config import (
 
 
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop nulls, fix types, remove low-activity users/movies."""
+    """Drop nulls, fix types, remove cold-start users/movies."""
     df = df.dropna(subset=["user_id", "movie_id", "rating"]).copy()
     df["rating"]   = df["rating"].astype(float)
     df["user_id"]  = df["user_id"].astype(int)
     df["movie_id"] = df["movie_id"].astype(int)
 
-    # Remove cold-start users and items
     user_counts  = df["user_id"].value_counts()
     movie_counts = df["movie_id"].value_counts()
 
-    df = df[df["user_id"].isin(user_counts[user_counts  >= MIN_USER_RATINGS].index)]
+    df = df[df["user_id"].isin(user_counts[user_counts   >= MIN_USER_RATINGS].index)]
     df = df[df["movie_id"].isin(movie_counts[movie_counts >= MIN_MOVIE_RATINGS].index)]
 
-    print(f"After cleaning: {df.shape[0]:,} rows | "
+    print(f"After cleaning : {df.shape[0]:,} rows | "
           f"{df['user_id'].nunique():,} users | "
           f"{df['movie_id'].nunique():,} movies")
     return df
 
 
 def encode_ids(df: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:
-    """Map user_id and movie_id to contiguous 0-based indices."""
+    """Map user_id / movie_id to contiguous 0-based indices."""
     users  = sorted(df["user_id"].unique())
     movies = sorted(df["movie_id"].unique())
 
@@ -39,7 +38,7 @@ def encode_ids(df: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:
     df["user_idx"]  = df["user_id"].map(user2idx)
     df["movie_idx"] = df["movie_id"].map(movie2idx)
 
-    print(f"Encoded: {len(user2idx):,} users | {len(movie2idx):,} movies")
+    print(f"Encoded        : {len(user2idx):,} users | {len(movie2idx):,} movies")
     return df, user2idx, movie2idx
 
 
@@ -52,11 +51,12 @@ def parse_genres(df: pd.DataFrame) -> pd.DataFrame:
 
 def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Temporal-style split:
-      - per user, hold out the last 20% of ratings as test
-      - from remaining, hold out 10% as validation
+    Per-user temporal split:
+      - last 20% of each user's ratings → test
+      - next 10%                        → validation
+      - remainder                       → train
     """
-    df = df.sort_values(["user_id", "rating"])  # proxy for time if no timestamp
+    df = df.sort_values(["user_id", "rating"]).reset_index(drop=True)
 
     test_rows, val_rows, train_rows = [], [], []
 
@@ -76,22 +76,13 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     val   = pd.concat(val_rows).reset_index(drop=True)
     test  = pd.concat(test_rows).reset_index(drop=True)
 
-    print(f"Split → train: {len(train):,} | val: {len(val):,} | test: {len(test):,}")
+    print(f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}")
     return train, val, test
 
 
-def save_processed(df: pd.DataFrame, name: str, folder=PROCESSED_DIR) -> None:
-    folder = folder if isinstance(folder, __builtins__.__class__) else __import__('pathlib').Path(folder)
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{name}.parquet"
-    df.to_parquet(path, index=False)
-    print(f"Saved {name} → {path}")
-
-
 def run_pipeline(train_raw: pd.DataFrame,
-                 val_raw: pd.DataFrame) -> dict:
-    """Full preprocessing pipeline."""
-    # Combine for global encoding, then re-split
+                 val_raw:   pd.DataFrame) -> dict:
+    """Full preprocessing pipeline — returns splits + mappings."""
     combined = pd.concat([train_raw, val_raw], ignore_index=True)
     combined = basic_clean(combined)
     combined = parse_genres(combined)
@@ -99,22 +90,37 @@ def run_pipeline(train_raw: pd.DataFrame,
 
     train, val, test = split_data(combined)
 
-    # Save
+    # Persist splits
     SPLITS_DIR.mkdir(parents=True, exist_ok=True)
     train.to_parquet(SPLITS_DIR / "train.parquet", index=False)
-    val.to_parquet(SPLITS_DIR  / "val.parquet",   index=False)
-    test.to_parquet(SPLITS_DIR / "test.parquet",  index=False)
-    print("All splits saved.")
+    val.to_parquet(SPLITS_DIR   / "val.parquet",   index=False)
+    test.to_parquet(SPLITS_DIR  / "test.parquet",  index=False)
+    print(f"Saved splits   → {SPLITS_DIR}")
+
+    # Persist mappings
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    pd.Series(user2idx).to_frame("idx").to_parquet(PROCESSED_DIR / "user2idx.parquet")
+    pd.Series(movie2idx).to_frame("idx").to_parquet(PROCESSED_DIR / "movie2idx.parquet")
+    print(f"Saved mappings → {PROCESSED_DIR}")
 
     return {
-        "train": train, "val": val, "test": test,
-        "user2idx": user2idx, "movie2idx": movie2idx,
-        "n_users": len(user2idx), "n_movies": len(movie2idx),
+        "train":     train,
+        "val":       val,
+        "test":      test,
+        "user2idx":  user2idx,
+        "movie2idx": movie2idx,
+        "n_users":   len(user2idx),
+        "n_movies":  len(movie2idx),
     }
 
 
 if __name__ == "__main__":
     from src.data.load_data import get_data
+
     train_raw, val_raw = get_data()
+    print("\nRunning preprocessing pipeline...")
     data = run_pipeline(train_raw, val_raw)
-    print("\nReady:", data["n_users"], "users,", data["n_movies"], "movies")
+
+    print(f"\n✓ Done — {data['n_users']:,} users | {data['n_movies']:,} movies")
+    print("\nTrain sample:")
+    print(data["train"][["user_id", "movie_id", "rating", "user_idx", "movie_idx"]].head())

@@ -1,16 +1,19 @@
 import pandas as pd
-from pathlib import Path
-from config import HF_DATASET_PATH, HF_SPLITS, RAW_DIR
+from datasets import load_dataset
+from config import HF_DATASET_PATH, RAW_DIR
+
 
 def load_from_huggingface() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load train and validation splits from HuggingFace."""
     print("Loading dataset from HuggingFace...")
 
-    train_df = pd.read_parquet(f"hf://datasets/{HF_DATASET_PATH}/{HF_SPLITS['train']}")
-    val_df   = pd.read_parquet(f"hf://datasets/{HF_DATASET_PATH}/{HF_SPLITS['validation']}")
+    dataset = load_dataset(HF_DATASET_PATH)
 
-    print(f"  Train:      {train_df.shape[0]:,} rows")
-    print(f"  Validation: {val_df.shape[0]:,} rows")
+    train_df = dataset["train"].to_pandas()
+    val_df   = dataset["validation"].to_pandas()
+
+    print(f"  Train:      {len(train_df):,} rows")
+    print(f"  Validation: {len(val_df):,} rows")
 
     return train_df, val_df
 
@@ -19,7 +22,7 @@ def save_raw(train_df: pd.DataFrame, val_df: pd.DataFrame) -> None:
     """Save raw splits to disk."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     train_df.to_parquet(RAW_DIR / "train.parquet", index=False)
-    val_df.to_parquet(RAW_DIR / "validation.parquet", index=False)
+    val_df.to_parquet(RAW_DIR   / "validation.parquet", index=False)
     print(f"Saved raw data to {RAW_DIR}")
 
 
@@ -29,7 +32,7 @@ def load_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     val_path   = RAW_DIR / "validation.parquet"
 
     if not train_path.exists():
-        raise FileNotFoundError("Raw data not found. Run load_from_huggingface() first.")
+        raise FileNotFoundError("Raw data not found. Run with force_download=True first.")
 
     return pd.read_parquet(train_path), pd.read_parquet(val_path)
 
