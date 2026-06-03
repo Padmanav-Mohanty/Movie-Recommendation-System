@@ -10,7 +10,7 @@ MODELS_DIR      = ROOT_DIR / "models" / "saved"
 REPORTS_DIR     = ROOT_DIR / "reports" / "figures"
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
-HF_DATASET_PATH = "ashraq/movielens-ratings"
+HF_DATASET_PATH = "ashraq/movielens_ratings"
 HF_SPLITS = {
     "train":      "data/train-00000-of-00001-8c8c7645a52d95e5.parquet",
     "validation": "data/validation-00000-of-00001-609ec132d91847f9.parquet",
