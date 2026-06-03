@@ -1,5 +1,3 @@
-# Movie-Recommendation-System
-
 # Movie Recommendation System
 
 A full-stack movie recommendation system built on the [MovieLens dataset](https://huggingface.co/datasets/ashraq/movielens-ratings) from HuggingFace.
