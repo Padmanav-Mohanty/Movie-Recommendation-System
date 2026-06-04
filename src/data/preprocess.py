@@ -72,9 +72,10 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
         val_rows.append(group.iloc[-(n_test + n_val):-n_test])
         train_rows.append(group.iloc[:-(n_test + n_val)])
 
-    train = pd.concat(train_rows).reset_index(drop=True)
-    val   = pd.concat(val_rows).reset_index(drop=True)
-    test  = pd.concat(test_rows).reset_index(drop=True)
+    empty = pd.DataFrame(columns=df.columns)
+    train = pd.concat(train_rows).reset_index(drop=True) if train_rows else empty
+    val   = pd.concat(val_rows).reset_index(drop=True)   if val_rows   else empty
+    test  = pd.concat(test_rows).reset_index(drop=True)  if test_rows  else empty
 
     print(f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}")
     return train, val, test

@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: movie-rec-api:local
+    container_name: movie-rec-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=development
+      - DEFAULT_MODEL=svd
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
+    volumes:
+      # Mount local data & models so the container uses your trained artefacts
+      - ./data:/app/data:ro
+      - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # Optional: MLflow tracking server
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.22.0
+    container_name: movie-rec-mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    restart: unless-stopped
+    profiles:
+      - tracking   # Only starts with: docker compose --profile tracking up
+
+volumes:
+  mlflow_data:

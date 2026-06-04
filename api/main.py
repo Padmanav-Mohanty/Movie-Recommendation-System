@@ -1,76 +1,140 @@
 """
-FastAPI application for the Movie Recommendation System.
+FastAPI application — Movie Recommendation System
+=================================================
 
-Endpoints:
-  GET  /health                         — liveness check
-  GET  /models                         — list available trained models
-  POST /recommendations                — get top-K recs for a user
-  POST /ratings/predict                — predict rating for (user, movie)
-  GET  /users/{user_idx}/history       — movies rated by a user (from train split)
-  GET  /movies/{movie_idx}             — metadata for a movie
+Endpoints
+---------
+  GET  /health                       — liveness + readiness check
+  GET  /models                       — list available trained models
+  POST /recommendations              — top-K recs for a user
+  POST /ratings/predict              — predicted rating for (user, movie)
+  GET  /users/{user_idx}/history     — movies rated by a user
+  GET  /movies/{movie_idx}           — movie metadata
+  GET  /evaluate                     — ranking evaluation on the test split
+
+Run locally
+-----------
+  uvicorn api.main:app --reload --port 8000
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from functools import lru_cache
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+import uvicorn
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# Make src/ importable when running from repo root
+# ── Make src/ importable when running from repo root ─────────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import MODELS_DIR, SPLITS_DIR, PROCESSED_DIR
-from src.serving.recommender import load_recommender, BaseRecommender
-from src.evaluation.metrics import rmse, mae
-
-# ── App ───────────────────────────────────────────────────────────────────────
-
-app = FastAPI(
-    title="Movie Recommendation API",
-    description="Serve recommendations from CF, SVD, and Two-Tower models.",
-    version="0.1.0",
+from src.evaluation.metrics import (
+    build_ground_truth,
+    evaluate_recommendations,
+    rmse,
+    mae,
 )
+from src.serving.recommender import BaseRecommender, load_recommender
 
-# ── Startup: load data once ───────────────────────────────────────────────────
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+log = logging.getLogger("api")
 
-_train_df: pd.DataFrame = None
-_test_df:  pd.DataFrame = None
-_movie_meta: pd.DataFrame = None   # movie_idx → title, genres
+# ── Application state ─────────────────────────────────────────────────────────
+_train_df:    Optional[pd.DataFrame] = None
+_test_df:     Optional[pd.DataFrame] = None
+_movie_meta:  Optional[pd.DataFrame] = None          # movie_idx → title, genres
+_recommenders: Dict[str, BaseRecommender] = {}
+
+AVAILABLE_MODELS = ["cf", "svd", "two_tower"]
+DEFAULT_MODEL     = os.getenv("DEFAULT_MODEL", "svd")
 
 
-@app.on_event("startup")
-def startup():
+# ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load shared data on startup; release on shutdown."""
     global _train_df, _test_df, _movie_meta
     try:
-        _train_df = pd.read_parquet(SPLITS_DIR / "train.parquet")
-        _test_df  = pd.read_parquet(SPLITS_DIR / "test.parquet")
+        _train_df   = pd.read_parquet(SPLITS_DIR / "train.parquet")
+        _test_df    = pd.read_parquet(SPLITS_DIR / "test.parquet")
         _movie_meta = (
             _train_df[["movie_idx", "movie_id", "title", "genres"]]
             .drop_duplicates("movie_idx")
             .set_index("movie_idx")
         )
-        print(f"Loaded train ({len(_train_df):,} rows) and test ({len(_test_df):,} rows)")
+        log.info("Loaded train (%s rows) and test (%s rows)",
+                 f"{len(_train_df):,}", f"{len(_test_df):,}")
     except FileNotFoundError:
-        print("WARNING: data splits not found — run preprocessing first.")
+        log.warning("Data splits not found — run preprocessing first.")
+    yield
+    _recommenders.clear()
+    log.info("Shutdown complete.")
 
 
-# ── Model cache ───────────────────────────────────────────────────────────────
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(
+    title="Movie Recommendation API",
+    description=(
+        "Production-grade REST API serving CF, SVD, and Two-Tower "
+        "recommendations from the MovieLens dataset."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
-_recommenders: dict[str, BaseRecommender] = {}
+# CORS — tighten origins in production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "svd")
-AVAILABLE_MODELS = ["cf", "svd", "two_tower"]
+
+# ── Request-timing middleware ─────────────────────────────────────────────────
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - start
+    response.headers["X-Process-Time-Ms"] = f"{elapsed * 1000:.2f}"
+    log.info("%s %s  %s  %.1fms",
+             request.method, request.url.path,
+             response.status_code, elapsed * 1000)
+    return response
 
 
+# ── Global exception handler ──────────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    log.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Check server logs."},
+    )
+
+
+# ── Model loader (lazy, cached) ───────────────────────────────────────────────
 def get_recommender(model_name: str) -> BaseRecommender:
-    """Lazy-load and cache recommender instances."""
     if model_name not in AVAILABLE_MODELS:
         raise HTTPException(
             status_code=400,
@@ -81,28 +145,45 @@ def get_recommender(model_name: str) -> BaseRecommender:
             _recommenders[model_name] = load_recommender(
                 model_name, train_df=_train_df
             )
-        except (FileNotFoundError, Exception) as e:
+            log.info("Loaded recommender: %s", model_name)
+        except FileNotFoundError as exc:
             raise HTTPException(
                 status_code=503,
-                detail=f"Model '{model_name}' not available: {e}",
-            )
+                detail=f"Model '{model_name}' not yet trained. {exc}",
+            ) from exc
+        except Exception as exc:
+            log.exception("Failed to load model '%s'", model_name)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Model '{model_name}' could not be loaded: {exc}",
+            ) from exc
     return _recommenders[model_name]
 
 
-# ── Schemas ───────────────────────────────────────────────────────────────────
+# ── Pydantic schemas ──────────────────────────────────────────────────────────
 
 class RecommendRequest(BaseModel):
-    user_idx:     int           = Field(...,  ge=0, description="User index (0-based)")
-    top_k:        int           = Field(10,   ge=1, le=100)
-    model:        str           = Field("svd", description="'cf' | 'svd' | 'two_tower'")
-    exclude_seen: bool          = Field(True)
+    user_idx:     int  = Field(...,    ge=0, description="User index (0-based)")
+    top_k:        int  = Field(10,    ge=1, le=100, description="Number of recommendations")
+    model:        str  = Field("svd", description="'cf' | 'svd' | 'two_tower'")
+    exclude_seen: bool = Field(True,  description="Exclude already-rated movies")
+
+    model_config = {"json_schema_extra": {"example": {
+        "user_idx": 0, "top_k": 10, "model": "svd", "exclude_seen": True
+    }}}
+
+
+class MovieResult(BaseModel):
+    movie_idx: int
+    title:     str
+    genres:    str
 
 
 class RecommendResponse(BaseModel):
-    user_idx:     int
-    model:        str
-    top_k:        int
-    recommendations: List[dict]   # [{movie_idx, title, genres}]
+    user_idx:        int
+    model:           str
+    top_k:           int
+    recommendations: List[MovieResult]
 
 
 class PredictRequest(BaseModel):
@@ -110,56 +191,70 @@ class PredictRequest(BaseModel):
     movie_idx: int = Field(..., ge=0)
     model:     str = Field("svd")
 
+    model_config = {"json_schema_extra": {"example": {
+        "user_idx": 0, "movie_idx": 50, "model": "svd"
+    }}}
+
 
 class PredictResponse(BaseModel):
-    user_idx:        int
-    movie_idx:       int
+    user_idx:         int
+    movie_idx:        int
     predicted_rating: float
-    model:           str
+    model:            str
+
+
+class HealthResponse(BaseModel):
+    status:       str
+    data_loaded:  bool
+    models_ready: List[str]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def enrich_movie(movie_idx: int) -> dict:
-    base = {"movie_idx": movie_idx}
+def enrich_movie(movie_idx: int) -> MovieResult:
     if _movie_meta is not None and movie_idx in _movie_meta.index:
         row = _movie_meta.loc[movie_idx]
-        base["title"]  = row.get("title", "Unknown")
-        base["genres"] = row.get("genres", "")
-    else:
-        base["title"]  = "Unknown"
-        base["genres"] = ""
-    return base
+        return MovieResult(
+            movie_idx=movie_idx,
+            title=str(row.get("title", "Unknown")),
+            genres=str(row.get("genres", "")),
+        )
+    return MovieResult(movie_idx=movie_idx, title="Unknown", genres="")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse, tags=["System"])
 def health():
-    return {"status": "ok"}
+    """Liveness + lightweight readiness check."""
+    return HealthResponse(
+        status="ok",
+        data_loaded=_train_df is not None,
+        models_ready=list(_recommenders.keys()),
+    )
 
 
-@app.get("/models")
+@app.get("/models", tags=["System"])
 def list_models():
-    available = []
-    for m in AVAILABLE_MODELS:
-        path_map = {
-            "cf":        MODELS_DIR / "user_based_cf.pkl",
-            "svd":       MODELS_DIR / "svd_model.pkl",
-            "two_tower": MODELS_DIR / "two_tower.pt",
-        }
-        available.append({
-            "name":    m,
-            "trained": path_map[m].exists(),
-        })
-    return {"models": available}
+    """List all models and whether their artefacts exist on disk."""
+    path_map = {
+        "cf":        MODELS_DIR / "user_based_cf.pkl",
+        "svd":       MODELS_DIR / "svd_model.pkl",
+        "two_tower": MODELS_DIR / "two_tower.pt",
+    }
+    return {
+        "models": [
+            {"name": m, "trained": path_map[m].exists(), "loaded": m in _recommenders}
+            for m in AVAILABLE_MODELS
+        ]
+    }
 
 
-@app.post("/recommendations", response_model=RecommendResponse)
+@app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
 def recommend(req: RecommendRequest):
+    """Return top-K movie recommendations for a user."""
     rec   = get_recommender(req.model)
-    recs  = rec.recommend(req.user_idx, top_k=req.top_k,
-                          exclude_seen=req.exclude_seen)
+    recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
     items = [enrich_movie(idx) for idx in recs]
     return RecommendResponse(
         user_idx=req.user_idx,
@@ -169,18 +264,18 @@ def recommend(req: RecommendRequest):
     )
 
 
-@app.post("/ratings/predict", response_model=PredictResponse)
+@app.post("/ratings/predict", response_model=PredictResponse, tags=["Recommendations"])
 def predict_rating(req: PredictRequest):
+    """Predict the rating a user would give a specific movie."""
     rec = get_recommender(req.model)
 
-    # Only SVD / CF expose a predict() method
-    predict_fn = getattr(rec, "_model", None)
-    if predict_fn is None or not hasattr(predict_fn, "predict"):
+    inner_model = getattr(rec, "_model", None)
+    if inner_model is None or not hasattr(inner_model, "predict"):
         raise HTTPException(
             status_code=400,
-            detail=f"Model '{req.model}' does not support rating prediction.",
+            detail=f"Model '{req.model}' does not expose a rating-prediction method.",
         )
-    rating = float(predict_fn.predict(req.user_idx, req.movie_idx))
+    rating = float(inner_model.predict(req.user_idx, req.movie_idx))
     return PredictResponse(
         user_idx=req.user_idx,
         movie_idx=req.movie_idx,
@@ -189,11 +284,12 @@ def predict_rating(req: PredictRequest):
     )
 
 
-@app.get("/users/{user_idx}/history")
+@app.get("/users/{user_idx}/history", tags=["Users"])
 def user_history(
     user_idx: int,
     limit: int = Query(20, ge=1, le=200),
 ):
+    """Return movies rated by a user (from the training split)."""
     if _train_df is None:
         raise HTTPException(status_code=503, detail="Data not loaded.")
     rows = _train_df[_train_df["user_idx"] == user_idx].head(limit)
@@ -203,42 +299,67 @@ def user_history(
     return {"user_idx": user_idx, "n_ratings": len(rows), "history": records}
 
 
-@app.get("/movies/{movie_idx}")
+@app.get("/movies/{movie_idx}", tags=["Movies"])
 def movie_info(movie_idx: int):
+    """Return metadata for a single movie."""
     info = enrich_movie(movie_idx)
-    if info["title"] == "Unknown":
+    if info.title == "Unknown":
         raise HTTPException(status_code=404, detail=f"Movie {movie_idx} not found.")
-    return info
+    return info.model_dump()
 
 
-@app.get("/evaluate")
+@app.get("/evaluate", tags=["Evaluation"])
 def evaluate_model(
-    model: str = Query("svd"),
-    n_users: int = Query(200, ge=10, le=2000),
-    top_k:  int = Query(10, ge=1, le=50),
+    model:   str = Query("svd",  description="Model to evaluate"),
+    n_users: int = Query(200,    ge=10, le=2000),
+    top_k:   int = Query(10,     ge=1,  le=50),
+    min_rating: float = Query(3.5, ge=0.5, le=5.0,
+                               description="Min rating to count as 'relevant'"),
 ):
     """
-    Quick evaluation of a model on the test split.
-    Samples n_users, computes Precision/Recall/NDCG@top_k.
+    Evaluate a model on the held-out test split.
+
+    Samples up to ``n_users`` users with at least one relevant item
+    and returns Precision/Recall/NDCG/HitRate@K, MAP, and MRR.
     """
     if _test_df is None:
         raise HTTPException(status_code=503, detail="Test data not loaded.")
 
-    from src.evaluation.metrics import (
-        evaluate_recommendations, build_ground_truth
-    )
+    rec = get_recommender(model)
+    gt  = build_ground_truth(_test_df, min_rating=min_rating)
 
-    rec      = get_recommender(model)
-    gt       = build_ground_truth(_test_df, min_rating=3.5)
-    user_ids = list(gt.keys())[:n_users]
+    if not gt:
+        raise HTTPException(
+            status_code=422,
+            detail=f"No users have ratings >= {min_rating} in the test split.",
+        )
 
+    user_ids  = list(gt.keys())[:n_users]
     recs_dict = rec.recommend_batch(user_ids, top_k=top_k)
-    results   = evaluate_recommendations(recs_dict, gt, k_values=[top_k])
-    return results.reset_index().to_dict(orient="records")
+
+    # Optional beyond-accuracy metrics
+    n_items = int(_test_df["movie_idx"].max()) + 1 if _test_df is not None else None
+
+    results_df = evaluate_recommendations(
+        recs_dict, gt,
+        k_values=[top_k],
+        n_items=n_items,
+    )
+    return {
+        "model":    model,
+        "n_users":  len(user_ids),
+        "top_k":    top_k,
+        "metrics":  results_df.reset_index().to_dict(orient="records"),
+    }
 
 
-# ── Run ───────────────────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "api.main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 8000)),
+        reload=os.getenv("ENV", "production") == "development",
+        log_level="info",
+    )
