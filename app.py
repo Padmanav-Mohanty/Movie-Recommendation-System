@@ -23,23 +23,12 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-/* Dark cinematic background */
-.stApp {
-    background: #0d0d0f;
-    color: #e8e8e8;
-}
+.stApp { background: #0d0d0f; color: #e8e8e8; }
 
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: #111114;
-    border-right: 1px solid #222;
-}
+[data-testid="stSidebar"] { background: #111114; border-right: 1px solid #222; }
 
-/* Hero title */
 .hero-title {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 3.8rem;
@@ -55,8 +44,6 @@ html, body, [class*="css"] {
     text-transform: uppercase;
     margin-bottom: 2rem;
 }
-
-/* Movie cards */
 .movie-card {
     background: #18181c;
     border: 1px solid #2a2a30;
@@ -68,9 +55,7 @@ html, body, [class*="css"] {
     gap: 1rem;
     transition: border-color 0.2s;
 }
-.movie-card:hover {
-    border-color: #e50914;
-}
+.movie-card:hover { border-color: #e50914; }
 .movie-rank {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 2rem;
@@ -78,25 +63,8 @@ html, body, [class*="css"] {
     min-width: 2.5rem;
     line-height: 1;
 }
-.movie-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #f0f0f0;
-    margin-bottom: 0.2rem;
-}
-.movie-genres {
-    font-size: 0.78rem;
-    color: #e50914;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.movie-idx {
-    font-size: 0.72rem;
-    color: #555;
-    margin-top: 0.2rem;
-}
-
-/* Metric pill */
+.movie-title { font-size: 1rem; font-weight: 600; color: #f0f0f0; margin-bottom: 0.2rem; }
+.movie-idx   { font-size: 0.72rem; color: #555; margin-top: 0.2rem; }
 .metric-pill {
     display: inline-block;
     background: #1e1e24;
@@ -108,16 +76,9 @@ html, body, [class*="css"] {
     margin-right: 0.4rem;
     margin-bottom: 0.4rem;
 }
-.metric-pill span {
-    color: #fff;
-    font-weight: 600;
-}
-
-/* Status badges */
+.metric-pill span { color: #fff; font-weight: 600; }
 .badge-green { color: #2ecc71; font-weight: 600; }
 .badge-red   { color: #e50914; font-weight: 600; }
-
-/* History table */
 .hist-row {
     display: flex;
     justify-content: space-between;
@@ -134,8 +95,6 @@ html, body, [class*="css"] {
     font-weight: 600;
     font-size: 0.8rem;
 }
-
-/* Section headers */
 .section-header {
     font-family: 'Bebas Neue', sans-serif;
     font-size: 1.6rem;
@@ -145,20 +104,7 @@ html, body, [class*="css"] {
     padding-bottom: 0.3rem;
     margin-bottom: 1.2rem;
 }
-
-/* Divider */
 hr { border-color: #1e1e24; }
-
-/* Star rating */
-.star { color: #f5c518; font-size: 1.2rem; }
-
-/* API status bar */
-.api-status {
-    font-size: 0.78rem;
-    padding: 0.4rem 0.8rem;
-    border-radius: 6px;
-    margin-bottom: 1rem;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -225,6 +171,20 @@ def get_evaluate(model, n_users, top_k):
     return None
 
 
+def run_ab_test(user_idx, top_k, model_a, model_b, exclude_seen):
+    r = requests.post(f"{API_BASE}/ab-test", json={
+        "user_idx": user_idx,
+        "top_k": top_k,
+        "model_a": model_a,
+        "model_b": model_b,
+        "exclude_seen": exclude_seen,
+    }, timeout=15)
+    if r.ok:
+        return r.json()
+    st.error(f"API error: {r.json().get('detail', r.text)}")
+    return None
+
+
 def stars(rating):
     filled = int(round(rating))
     return "★" * filled + "☆" * (5 - filled)
@@ -232,29 +192,43 @@ def stars(rating):
 
 def genre_tags(genres_str):
     tags = genres_str.split("|") if genres_str else []
-    return " ".join(f'<span style="background:#1e1e24;border:1px solid #333;border-radius:4px;padding:1px 6px;font-size:0.72rem;color:#aaa;margin-right:3px">{g}</span>' for g in tags[:4])
+    return " ".join(
+        f'<span style="background:#1e1e24;border:1px solid #333;border-radius:4px;'
+        f'padding:1px 6px;font-size:0.72rem;color:#aaa;margin-right:3px">{g}</span>'
+        for g in tags[:4]
+    )
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown('<div class="hero-title">🎬</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:2rem">🎬</div>', unsafe_allow_html=True)
     st.markdown("### Movie Recommender")
-    st.markdown('<div style="font-size:0.75rem;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:1.5rem">Powered by SVD · CF · Two-Tower</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:0.75rem;color:#666;text-transform:uppercase;'
+        'letter-spacing:1px;margin-bottom:1.5rem">Powered by SVD · CF · Two-Tower</div>',
+        unsafe_allow_html=True,
+    )
 
     health = api_health()
     if health:
         st.markdown('<div class="badge-green">● API Online</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="badge-red">● API Offline — start your FastAPI server</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="badge-red">● API Offline — start your FastAPI server</div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 
-    page = st.radio("Navigate", ["🎯 Recommendations", "📋 User History", "⭐ Rate Prediction", "📊 Evaluate Models"], label_visibility="collapsed")
+    page = st.radio(
+        "Navigate",
+        ["🎯 Recommendations", "📋 User History", "⭐ Rate Prediction", "📊 Evaluate Models", "🧪 A/B Test"],
+        label_visibility="collapsed",
+    )
 
     st.divider()
 
-    # Model status
     st.markdown("**Model Status**")
     models_info = api_models()
     for m in models_info:
@@ -263,7 +237,7 @@ with st.sidebar:
         st.markdown(f"{icon} `{m['name']}`{loaded}")
 
 
-# ── Main content ──────────────────────────────────────────────────────────────
+# ── Pages ─────────────────────────────────────────────────────────────────────
 
 if page == "🎯 Recommendations":
     st.markdown('<div class="hero-title">RECOMMENDATIONS</div>', unsafe_allow_html=True)
@@ -286,8 +260,17 @@ if page == "🎯 Recommendations":
 
         if result:
             recs = result["recommendations"]
-            st.markdown(f'<div class="section-header">Top {len(recs)} for User #{user_idx}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="margin-bottom:1rem"><span class="metric-pill">Model <span>{model.upper()}</span></span><span class="metric-pill">Exclude Seen <span>{"Yes" if exclude_seen else "No"}</span></span></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="section-header">Top {len(recs)} for User #{user_idx}</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<div style="margin-bottom:1rem">'
+                f'<span class="metric-pill">Model <span>{model.upper()}</span></span>'
+                f'<span class="metric-pill">Exclude Seen <span>{"Yes" if exclude_seen else "No"}</span></span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
             for i, movie in enumerate(recs, 1):
                 st.markdown(f"""
@@ -301,9 +284,13 @@ if page == "🎯 Recommendations":
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Download button
             df = pd.DataFrame(recs)
-            st.download_button("⬇ Download as CSV", df.to_csv(index=False), f"recs_user{user_idx}_{model}.csv", "text/csv")
+            st.download_button(
+                "⬇ Download as CSV",
+                df.to_csv(index=False),
+                f"recs_user{user_idx}_{model}.csv",
+                "text/csv",
+            )
 
 
 elif page == "📋 User History":
@@ -321,7 +308,10 @@ elif page == "📋 User History":
             history = get_user_history(user_idx, limit)
 
         if history:
-            st.markdown(f'<div class="section-header">User #{user_idx} — {history["n_ratings"]} ratings</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="section-header">User #{user_idx} — {history["n_ratings"]} ratings</div>',
+                unsafe_allow_html=True,
+            )
 
             for row in history["history"]:
                 rating = row.get("rating", 0)
@@ -329,7 +319,7 @@ elif page == "📋 User History":
                 <div class="hist-row">
                     <div>
                         <div style="font-weight:500;color:#f0f0f0">{row['title']}</div>
-                        <div style="font-size:0.75rem;color:#555">{row.get('genres','')}</div>
+                        <div style="font-size:0.75rem;color:#555">{row.get('genres', '')}</div>
                     </div>
                     <div style="text-align:right">
                         <div class="hist-rating">{rating:.1f} ★</div>
@@ -345,7 +335,10 @@ elif page == "📋 User History":
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Movies Rated", history["n_ratings"])
                 col2.metric("Avg Rating", f"{avg:.2f} ★")
-                col3.metric("Genres", df["genres"].str.split("|").explode().nunique() if "genres" in df else "—")
+                col3.metric(
+                    "Genres",
+                    df["genres"].str.split("|").explode().nunique() if "genres" in df else "—",
+                )
 
 
 elif page == "⭐ Rate Prediction":
@@ -373,26 +366,34 @@ elif page == "⭐ Rate Prediction":
             c2.metric("Stars", stars(predicted))
             c3.metric("Model", model.upper())
 
-            # Visual bar
             pct = predicted / 5.0
+            bar_color = "#e50914" if pct < 0.5 else "#2ecc71"
             st.markdown(f"""
             <div style="margin-top:1.5rem">
-                <div style="font-size:0.8rem;color:#666;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px">Confidence bar</div>
+                <div style="font-size:0.8rem;color:#666;margin-bottom:0.4rem;
+                            text-transform:uppercase;letter-spacing:1px">Confidence bar</div>
                 <div style="background:#1e1e24;border-radius:6px;height:10px;overflow:hidden">
-                    <div style="background:{'#e50914' if pct < 0.5 else '#2ecc71'};width:{pct*100:.0f}%;height:100%;border-radius:6px;transition:width 0.5s"></div>
+                    <div style="background:{bar_color};width:{pct*100:.0f}%;height:100%;
+                                border-radius:6px;transition:width 0.5s"></div>
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:#444;margin-top:4px"><span>0</span><span>5</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:0.7rem;
+                            color:#444;margin-top:4px"><span>0</span><span>5</span></div>
             </div>
             """, unsafe_allow_html=True)
 
+            if predicted >= 4.0:
+                interpretation = "🎯 Strong match — this user is likely to enjoy this movie."
+            elif predicted >= 3.0:
+                interpretation = "👍 Decent match — user may enjoy it."
+            else:
+                interpretation = "⚠️ Weak match — user is unlikely to rate this highly."
+
             st.markdown(f"""
-            <div style="margin-top:1.5rem;background:#18181c;border:1px solid #2a2a30;border-radius:10px;padding:1rem">
-                <div style="font-size:0.75rem;color:#666;text-transform:uppercase;letter-spacing:1px">Interpretation</div>
-                <div style="margin-top:0.5rem;color:#ccc">
-                {'🎯 Strong match — this user is likely to enjoy this movie.' if predicted >= 4.0 
-                 else '👍 Decent match — user may enjoy it.' if predicted >= 3.0 
-                 else '⚠️ Weak match — user is unlikely to rate this highly.'}
-                </div>
+            <div style="margin-top:1.5rem;background:#18181c;border:1px solid #2a2a30;
+                        border-radius:10px;padding:1rem">
+                <div style="font-size:0.75rem;color:#666;text-transform:uppercase;letter-spacing:1px">
+                    Interpretation</div>
+                <div style="margin-top:0.5rem;color:#ccc">{interpretation}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -418,7 +419,10 @@ elif page == "📊 Evaluate Models":
 
         if result:
             metrics = result["metrics"][0] if result["metrics"] else {}
-            st.markdown(f'<div class="section-header">{model.upper()} @ K={top_k} — {result["n_users"]} users</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="section-header">{model.upper()} @ K={top_k} — {result["n_users"]} users</div>',
+                unsafe_allow_html=True,
+            )
 
             cols = st.columns(3)
             metric_map = {
@@ -436,10 +440,110 @@ elif page == "📊 Evaluate Models":
             if "Coverage@K" in metrics:
                 st.divider()
                 c1, c2 = st.columns(2)
-                c1.metric("Catalogue Coverage", f"{metrics['Coverage@K']:.2%}", help="% of catalogue recommended to ≥1 user")
+                c1.metric(
+                    "Catalogue Coverage",
+                    f"{metrics['Coverage@K']:.2%}",
+                    help="% of catalogue recommended to ≥1 user",
+                )
                 if "Novelty@K" in metrics:
-                    c2.metric("Novelty", f"{metrics['Novelty@K']:.2f}", help="Mean self-information — higher = more surprising recommendations")
+                    c2.metric(
+                        "Novelty",
+                        f"{metrics['Novelty@K']:.2f}",
+                        help="Mean self-information — higher = more surprising recommendations",
+                    )
 
-            # Raw metrics table
             with st.expander("Raw metrics JSON"):
                 st.json(metrics)
+
+
+elif page == "🧪 A/B Test":
+    st.markdown('<div class="hero-title">A/B TEST</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-sub">Compare two models side by side for the same user</div>', unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+    with col1:
+        user_idx = st.number_input("User Index", min_value=0, max_value=29473, value=42, step=1)
+    with col2:
+        trained_models = [m["name"] for m in models_info if m["trained"]] or ["svd", "cf"]
+        model_a = st.selectbox("Model A", trained_models, index=0)
+    with col3:
+        model_b_opts = [m for m in trained_models if m != model_a]
+        if model_b_opts:
+            model_b = st.selectbox("Model B", model_b_opts, index=0)
+        else:
+            model_b = st.selectbox("Model B", trained_models, index=0)
+    with col4:
+        top_k = st.slider("Top K", 5, 20, 10, step=5)
+
+    if st.button("🧪 Run A/B Test", use_container_width=True, type="primary"):
+        with st.spinner("Running both models..."):
+            result = run_ab_test(user_idx, top_k, model_a, model_b, exclude_seen=True)
+
+        if result:
+            overlap_pct = result["overlap_pct"]
+
+            st.divider()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Overlap", f"{overlap_pct:.0f}%", help="% of top-K both models agree on")
+            c2.metric(f"Unique to {model_a.upper()}", len(result["unique_to_a"]))
+            c3.metric(f"Unique to {model_b.upper()}", len(result["unique_to_b"]))
+
+            if overlap_pct < 40:
+                overlap_color = "#2ecc71"
+                diversity_msg = "🟢 Low overlap — models capture different signals, good for ensembling."
+            elif overlap_pct < 70:
+                overlap_color = "#f39c12"
+                diversity_msg = "🟡 Moderate overlap — models partially agree."
+            else:
+                overlap_color = "#e50914"
+                diversity_msg = "🔴 High overlap — models recommend very similar items."
+
+            st.markdown(f"""
+            <div style="background:#18181c;border:1px solid #2a2a30;border-radius:10px;
+                        padding:1rem;margin:1rem 0">
+                <div style="font-size:0.75rem;color:#666;text-transform:uppercase;
+                            letter-spacing:1px;margin-bottom:0.5rem">Diversity Signal</div>
+                <div style="background:#111;border-radius:6px;height:8px;overflow:hidden">
+                    <div style="background:{overlap_color};width:{overlap_pct}%;
+                                height:100%;border-radius:6px"></div>
+                </div>
+                <div style="font-size:0.8rem;color:#aaa;margin-top:0.5rem">{diversity_msg}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.divider()
+            col_a, col_b = st.columns(2)
+
+            with col_a:
+                st.markdown(f'<div class="section-header">{model_a.upper()}</div>', unsafe_allow_html=True)
+                for i, movie in enumerate(result["results_a"], 1):
+                    is_overlap = any(m["movie_idx"] == movie["movie_idx"] for m in result["overlap"])
+                    border = "border-color: #2ecc71;" if is_overlap else ""
+                    checkmark = " ✓" if is_overlap else ""
+                    st.markdown(f"""
+                    <div class="movie-card" style="{border}">
+                        <div class="movie-rank">{i:02d}</div>
+                        <div style="flex:1">
+                            <div class="movie-title">{movie['title']}{checkmark}</div>
+                            <div style="margin-top:4px">{genre_tags(movie['genres'])}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with col_b:
+                st.markdown(f'<div class="section-header">{model_b.upper()}</div>', unsafe_allow_html=True)
+                for i, movie in enumerate(result["results_b"], 1):
+                    is_overlap = any(m["movie_idx"] == movie["movie_idx"] for m in result["overlap"])
+                    border = "border-color: #2ecc71;" if is_overlap else ""
+                    checkmark = " ✓" if is_overlap else ""
+                    st.markdown(f"""
+                    <div class="movie-card" style="{border}">
+                        <div class="movie-rank">{i:02d}</div>
+                        <div style="flex:1">
+                            <div class="movie-title">{movie['title']}{checkmark}</div>
+                            <div style="margin-top:4px">{genre_tags(movie['genres'])}</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            st.caption("✓ = movie recommended by both models")

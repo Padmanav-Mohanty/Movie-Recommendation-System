@@ -353,6 +353,75 @@ def evaluate_model(
     }
 
 
+# ── A/B Testing ───────────────────────────────────────────────────────────────
+
+class ABTestRequest(BaseModel):
+    user_idx:     int  = Field(..., ge=0, description="User index (0-based)")
+    top_k:        int  = Field(10, ge=1, le=100)
+    model_a:      str  = Field("svd", description="First model: 'cf' | 'svd' | 'two_tower'")
+    model_b:      str  = Field("cf",  description="Second model: 'cf' | 'svd' | 'two_tower'")
+    exclude_seen: bool = Field(True)
+
+    model_config = {"json_schema_extra": {"example": {
+        "user_idx": 42, "top_k": 10, "model_a": "svd", "model_b": "cf", "exclude_seen": True
+    }}}
+
+
+class ABTestResponse(BaseModel):
+    user_idx:  int
+    top_k:     int
+    model_a:   str
+    model_b:   str
+    results_a: List[MovieResult]
+    results_b: List[MovieResult]
+    overlap:   List[MovieResult]
+    overlap_pct: float
+    unique_to_a: List[MovieResult]
+    unique_to_b: List[MovieResult]
+
+
+@app.post("/ab-test", response_model=ABTestResponse, tags=["Recommendations"])
+def ab_test(req: ABTestRequest):
+    """
+    Compare two models side by side for the same user.
+
+    Returns recommendations from both models plus an overlap analysis —
+    which movies both models agree on, and which are unique to each.
+    Overlap % is a diversity signal: low overlap means the models are
+    capturing different signals and may complement each other.
+    """
+    if req.model_a == req.model_b:
+        raise HTTPException(
+            status_code=400,
+            detail="model_a and model_b must be different.",
+        )
+
+    rec_a = get_recommender(req.model_a)
+    rec_b = get_recommender(req.model_b)
+
+    recs_a = rec_a.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    recs_b = rec_b.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+
+    set_a, set_b = set(recs_a), set(recs_b)
+    overlap_idxs    = set_a & set_b
+    unique_a_idxs   = set_a - set_b
+    unique_b_idxs   = set_b - set_a
+    overlap_pct     = len(overlap_idxs) / req.top_k * 100
+
+    return ABTestResponse(
+        user_idx=req.user_idx,
+        top_k=req.top_k,
+        model_a=req.model_a,
+        model_b=req.model_b,
+        results_a=[enrich_movie(i) for i in recs_a],
+        results_b=[enrich_movie(i) for i in recs_b],
+        overlap=[enrich_movie(i) for i in overlap_idxs],
+        overlap_pct=round(overlap_pct, 1),
+        unique_to_a=[enrich_movie(i) for i in unique_a_idxs],
+        unique_to_b=[enrich_movie(i) for i in unique_b_idxs],
+    )
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
