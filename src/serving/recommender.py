@@ -11,7 +11,10 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import torch
+try:
+    import torch
+except ImportError:  # pragma: no cover
+    torch = None  # type: ignore[assignment]
 
 from config import (
     MODELS_DIR, PROCESSED_DIR, SPLITS_DIR,
