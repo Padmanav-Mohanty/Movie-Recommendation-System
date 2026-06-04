@@ -1,31 +1,32 @@
 # 🎬 Movie Recommendation System
 
-> **A production-grade, end-to-end recommender system** built on the [MovieLens dataset](https://huggingface.co/datasets/ashraq/movielens_ratings) — from raw ratings to a containerised REST API serving three distinct model families.
+> **Production-grade, end-to-end recommender system** built on the [MovieLens dataset](https://huggingface.co/datasets/ashraq/movielens_ratings) — from raw ratings to a containerised REST API serving three distinct model families across 940k ratings, 29k users, and 7.6k movies.
 
 [![CI](https://github.com/Padmanav-Mohanty/Movie-Recommendation-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Padmanav-Mohanty/Movie-Recommendation-System/actions/workflows/ci.yml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch)](https://pytorch.org)
+[![scikit-surprise](https://img.shields.io/badge/scikit--surprise-1.1-orange)](https://surpriselib.com/)
+[![FAISS](https://img.shields.io/badge/FAISS-ANN-blueviolet)](https://faiss.ai/)
+[![MLflow](https://img.shields.io/badge/MLflow-tracking-blue?logo=mlflow)](https://mlflow.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## Table of Contents
+## 📌 What Makes This Different
 
-- [Architecture Overview](#architecture-overview)
-- [Models](#models)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-- [Running Tests](#running-tests)
-- [Docker & Deployment](#docker--deployment)
-- [CI/CD](#cicd)
-- [Metrics](#metrics)
-- [Configuration](#configuration)
+Most recommendation system projects stop at a Jupyter notebook with a single algorithm. This project mirrors how recommendations are built in industry:
+
+- **3 model families** trained and served behind a single unified API
+- **Temporal train/test split** — avoids the data-leakage mistake most tutorials make
+- **FAISS Approximate Nearest Neighbour** index for sub-millisecond Two-Tower retrieval
+- **MLflow experiment tracking** with logged metrics per run
+- **Full evaluation suite** — not just RMSE, but NDCG, MAP, MRR, Coverage, Novelty
+- **Containerised** with Docker + CI/CD via GitHub Actions
 
 ---
 
-## Architecture Overview
+## 🏗️ Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -53,32 +54,81 @@
                            ▼
               ┌─────────────────────────┐
               │  MovieLens Dataset      │
-              │  (HuggingFace Hub)      │
+              │  940k ratings           │
+              │  29,474 users           │
+              │  7,642 movies           │
               └─────────────────────────┘
 ```
 
 ---
 
-## Models
+## 📊 Model Results
 
-| Model | Type | RMSE | MAE | Notes |
-|-------|------|------|-----|-------|
-| **User-Based CF** | Memory-based | ~0.95 | ~0.74 | cosine similarity, K=50 neighbours |
-| **SVD** | Matrix factorisation | ~0.76 | ~0.58 | 100 latent factors, 20 epochs |
-| **NMF** | Matrix factorisation | ~0.83 | ~0.64 | non-negative, same hyperparams |
-| **Two-Tower** | Neural (PyTorch) | ~0.72 | ~0.55 | embeddings + side features, FAISS ANN |
+All models evaluated on a **temporal held-out test split** (last 20% of each user's rating history).
 
-All models are evaluated on a held-out temporal test split (last 20% of each user's history).
+### Rating Prediction
+
+| Model | RMSE ↓ | MAE ↓ | Train Time |
+|-------|--------|-------|------------|
+| **User-Based CF** | ~0.95 | ~0.74 | — (memory-based) |
+| **SVD** | **0.893** | **0.779** | ~8s |
+| **NMF** | ~0.83 | ~0.64 | ~12s |
+| **Two-Tower** | ~0.72 | ~0.55 | ~15min (CPU) |
+
+### Ranking Metrics @ K=10 (SVD)
+
+| Precision@10 | Recall@10 | NDCG@10 | MAP | MRR |
+|---|---|---|---|---|
+| 0.0312 | 0.0587 | 0.0441 | 0.0298 | 0.1023 |
+
+### Sample API Response
+
+```json
+POST /recommendations
+{
+  "user_idx": 42,
+  "top_k": 10,
+  "model": "svd",
+  "exclude_seen": true
+}
+
+→ 200 OK
+{
+  "user_idx": 42,
+  "model": "svd",
+  "top_k": 10,
+  "recommendations": [
+    { "movie_idx": 4781, "title": "Planet Earth II (2016)",           "genres": "Documentary" },
+    { "movie_idx": 5506, "title": "Blue Planet II (2017)",            "genres": "Documentary" },
+    { "movie_idx":  630, "title": "Gone Girl (2014)",                 "genres": "Drama|Thriller" },
+    { "movie_idx": 1279, "title": "Story of Film: An Odyssey (2011)", "genres": "Documentary" },
+    { "movie_idx":  701, "title": "Coherence (2013)",                 "genres": "Mystery|Sci-Fi|Thriller" }
+  ]
+}
+```
 
 ---
 
-## Project Structure
+## 🧠 Models
+
+### User-Based Collaborative Filtering
+Memory-based CF using cosine similarity across the full user-user matrix. K=50 nearest neighbours with weighted rating aggregation. No training required — predicts directly from the interaction matrix.
+
+### SVD / NMF (Matrix Factorisation)
+Uses [scikit-surprise](https://surpriselib.com/) with 100 latent factors, trained for 20 epochs. SVD achieves the best RMSE/speed trade-off and is the recommended default model. Cross-validated RMSE: **0.7638**.
+
+### Two-Tower Neural Model (PyTorch + FAISS)
+Dual-encoder architecture with separate user and item towers. Each tower combines learned embeddings with side features (genre affinities, activity stats for users; OHE genres, year, popularity for items). At serve time, user vectors are queried against a pre-built **FAISS IndexFlatIP** for sub-millisecond ANN retrieval across 7.6k items.
+
+---
+
+## 📁 Project Structure
 
 ```
 movie-recommendation-system/
 ├── config.py                         # Centralised hyperparameters & paths
 ├── api/
-│   └── main.py                       # FastAPI application (lifespan, middleware, routes)
+│   └── main.py                       # FastAPI app (lifespan, middleware, routes)
 ├── src/
 │   ├── data/
 │   │   ├── load_data.py              # HuggingFace download + local caching
@@ -86,234 +136,170 @@ movie-recommendation-system/
 │   ├── features/
 │   │   └── build_features.py        # User/item feature matrices, interaction matrix
 │   ├── models/
-│   │   ├── collaborative_filtering.py   # User-based CF (cosine similarity)
-│   │   ├── matrix_factorization.py      # SVD / NMF via scikit-surprise + MLflow
-│   │   └── two_tower.py                 # Two-tower neural model (PyTorch) + MLflow
+│   │   ├── collaborative_filtering.py
+│   │   ├── matrix_factorization.py  # SVD / NMF via scikit-surprise + MLflow
+│   │   └── two_tower.py             # Two-Tower neural model (PyTorch) + MLflow
 │   ├── evaluation/
 │   │   └── metrics.py               # RMSE, MAE, P/R/NDCG/HR@K, MAP, MRR, Coverage, Novelty
 │   └── serving/
 │       └── recommender.py           # Unified interface + FAISS ANN index
-├── tests/
-│   ├── conftest.py                  # Shared fixtures (synthetic dataset)
-│   ├── test_metrics.py              # Unit tests — evaluation metrics
-│   ├── test_preprocessing.py        # Unit tests — data pipeline
-│   ├── test_features.py             # Unit tests — feature engineering
-│   ├── test_collaborative_filtering.py  # Unit + integration — CF model
-│   └── test_api.py                  # API integration tests (TestClient + mocks)
 ├── notebooks/
 │   ├── 01_eda.ipynb
 │   ├── 02_feature_engineering.ipynb
 │   ├── 03_baseline_cf.ipynb
 │   ├── 04_matrix_factorization.ipynb
 │   ├── 05_two_tower_model.ipynb
-│   └── 06_evaluation.ipynb
+│   └── 06_evaluation_fixed.ipynb
+├── tests/                            # pytest suite — unit + integration
 ├── Dockerfile                        # Multi-stage build (builder + runtime)
-├── docker-compose.yml                # API + optional MLflow tracking server
-├── Makefile                          # Developer ergonomics
-├── pyproject.toml
-└── .github/workflows/ci.yml         # CI: lint → test → Docker build → GHCR push
+├── docker-compose.yml
+├── Makefile
+└── .github/workflows/ci.yml         # lint → test → Docker build → GHCR push
 ```
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
-
 - Python 3.12+
-- [`uv`](https://docs.astral.sh/uv/) (recommended) **or** `pip`
-- Docker (optional, for containerised deployment)
+- [`uv`](https://docs.astral.sh/uv/) (recommended) or `pip`
+- Docker (optional)
 
 ### 1 — Install
 
 ```bash
 git clone https://github.com/Padmanav-Mohanty/Movie-Recommendation-System.git
 cd Movie-Recommendation-System
-
-# With uv (fast)
-make install
-
-# Or with pip
-pip install -e .
+pip install uv
+uv sync --frozen
 ```
 
-### 2 — Run the full data + training pipeline
+### 2 — Run the pipeline
 
 ```bash
 # Download + preprocess data
-make data
-make preprocess
-make features
+uv run python -m src.data.load_data
+uv run python -m src.data.preprocess
+uv run python -m src.features.build_features
 
-# Train the recommended model (SVD — best RMSE/speed trade-off)
-make train-svd
+# Train SVD (recommended — best speed/accuracy trade-off, ~8s)
+$env:PYTHONPATH = (Get-Location).Path   # Windows PowerShell
+python src/models/matrix_factorization.py
 
-# Or train everything
-make train-all
+# Or on Linux/Mac:
+PYTHONPATH=. python src/models/matrix_factorization.py
 ```
 
 ### 3 — Launch the API
 
 ```bash
-make serve
-# → http://localhost:8000
-# → Swagger UI: http://localhost:8000/docs
+uv run uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+Open **http://localhost:8000/docs** for the interactive Swagger UI.
 
 ### 4 — Get recommendations
 
 ```bash
 curl -X POST http://localhost:8000/recommendations \
   -H "Content-Type: application/json" \
-  -d '{"user_idx": 0, "top_k": 10, "model": "svd"}'
+  -d '{"user_idx": 42, "top_k": 10, "model": "svd", "exclude_seen": true}'
 ```
 
 ---
 
-## API Reference
+## 📡 API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Liveness + readiness check |
 | `GET` | `/models` | List models and training status |
 | `POST` | `/recommendations` | Top-K recommendations for a user |
-| `POST` | `/ratings/predict` | Predicted rating for (user, movie) |
+| `POST` | `/ratings/predict` | Predicted rating for (user, movie) pair |
 | `GET` | `/users/{user_idx}/history` | Movies rated by a user |
 | `GET` | `/movies/{movie_idx}` | Movie metadata |
-| `GET` | `/evaluate` | Ranking evaluation on test split |
+| `GET` | `/evaluate` | Live ranking evaluation on test split |
 
-Interactive documentation is available at **`/docs`** (Swagger UI) and **`/redoc`** (ReDoc) when the server is running.
+Interactive docs: **`/docs`** (Swagger UI) · **`/redoc`** (ReDoc)
 
-### Example Requests
+---
 
-**Recommendations (SVD model)**
+## 🧪 Running Tests
+
 ```bash
-curl -X POST http://localhost:8000/recommendations \
-  -H "Content-Type: application/json" \
-  -d '{"user_idx": 42, "top_k": 5, "model": "svd", "exclude_seen": true}'
+uv run pytest tests/ -v --tb=short        # full suite
+uv run pytest tests/ -m "not slow"        # fast unit tests only
+uv run pytest tests/ --cov=src --cov=api  # with coverage
 ```
 
-**Rating prediction**
-```bash
-curl -X POST http://localhost:8000/ratings/predict \
-  -H "Content-Type: application/json" \
-  -d '{"user_idx": 42, "movie_idx": 150, "model": "svd"}'
-```
+Tests use a **synthetic in-memory dataset** — no data download required.
 
-**Live evaluation**
+---
+
+## 🐳 Docker
+
 ```bash
-curl "http://localhost:8000/evaluate?model=svd&n_users=500&top_k=10"
+# Build and start
+docker compose up --build -d
+
+# API → http://localhost:8000
+# MLflow UI → docker compose --profile tracking up
+
+docker compose down
 ```
 
 ---
 
-## Running Tests
+## ⚙️ CI/CD
 
-```bash
-# Full test suite
-make test
-
-# With coverage report
-make test-cov
-# → Opens htmlcov/index.html
-
-# Quick unit tests only
-make test-fast
-```
-
-The test suite uses a **synthetic in-memory dataset** — no data download is required to run tests.
-
----
-
-## Docker & Deployment
-
-### Local Docker
-
-```bash
-# Build image
-make docker-build
-
-# Start API (+ optional MLflow tracking)
-make docker-up
-# → API:    http://localhost:8000
-# → MLflow: docker compose --profile tracking up
-
-# Stop
-make docker-down
-```
-
-### Production image
-
-The multi-stage `Dockerfile` produces a minimal runtime image (~300 MB):
-- **Builder stage**: installs all dependencies with `uv`
-- **Runtime stage**: copies only the virtual environment + source; runs as a non-root user
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8000` | Server port |
-| `ENV` | `production` | `development` enables hot-reload |
-| `DEFAULT_MODEL` | `svd` | Default recommendation model |
-| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
-
----
-
-## CI/CD
-
-The GitHub Actions pipeline (`.github/workflows/ci.yml`) runs on every push and PR:
+GitHub Actions runs on every push and PR:
 
 ```
-push/PR
-  │
-  ├── lint        ruff check + format check
-  │
-  ├── test        pytest + coverage (Python 3.12)
-  │                └── coverage uploaded to Codecov
-  │
-  ├── docker      docker build --target runtime (cache via GHA)
-  │
-  └── publish     (main branch only)
-                  docker push → ghcr.io/<owner>/movie-recommendation-system
+push / PR
+  ├── lint      ruff check + format
+  ├── test      pytest + coverage → Codecov
+  ├── docker    build --target runtime
+  └── publish   (main only) → ghcr.io/padmanav-mohanty/movie-recommendation-system
 ```
 
 ---
 
-## Metrics
+## 📏 Evaluation Metrics
 
 ### Rating Prediction
 | Metric | Formula |
 |--------|---------|
 | **RMSE** | √(mean((y_true − y_pred)²)) |
-| **MAE** | mean(|y_true − y_pred|) |
+| **MAE** | mean(\|y_true − y_pred\|) |
 
-### Ranking (implemented for all K values)
+### Ranking
 | Metric | Description |
 |--------|-------------|
 | **Precision@K** | Fraction of top-K that are relevant |
-| **Recall@K** | Fraction of relevant items in top-K |
+| **Recall@K** | Fraction of relevant items found in top-K |
 | **NDCG@K** | Normalised Discounted Cumulative Gain |
-| **HitRate@K** | 1 if any relevant item appears in top-K |
+| **HitRate@K** | 1 if any relevant item in top-K |
 | **MAP** | Mean Average Precision |
 | **MRR** | Mean Reciprocal Rank |
 
 ### Beyond Accuracy
 | Metric | Description |
 |--------|-------------|
-| **Catalogue Coverage@K** | % of items recommended to at least one user |
+| **Coverage@K** | % of catalogue recommended to ≥1 user |
 | **Novelty@K** | Mean self-information (rewards less-popular items) |
 
 ---
 
-## Configuration
+## ⚙️ Configuration
 
-All hyperparameters and paths live in `config.py`:
+All hyperparameters in `config.py`:
 
 ```python
 # Preprocessing
-MIN_USER_RATINGS  = 5      # Drop cold-start users
-MIN_MOVIE_RATINGS = 5      # Drop cold-start items
-TEST_SIZE         = 0.2    # Last 20% of each user's history
+MIN_USER_RATINGS  = 5      # drop cold-start users
+MIN_MOVIE_RATINGS = 5      # drop cold-start items
+TEST_SIZE         = 0.2    # temporal last-20% split
 
 # SVD
 SVD_N_FACTORS = 100
@@ -335,6 +321,6 @@ N_CANDIDATES  = 100    # FAISS retrieves top-100, reranked to top-K
 
 ---
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
