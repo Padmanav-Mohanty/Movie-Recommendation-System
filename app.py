@@ -4,11 +4,15 @@ Run: streamlit run app.py
 Expects the FastAPI backend running at http://localhost:8000
 """
 
+import os
+
 import streamlit as st
 import requests
 import pandas as pd
 
-API_BASE = "http://localhost:8000"
+# When deployed on HF Spaces, set the API_BASE_URL Space secret to your
+# Render service URL, e.g. https://movie-recommender-api.onrender.com
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
