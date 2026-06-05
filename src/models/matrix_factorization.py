@@ -64,10 +64,21 @@ class MatrixFactorization:
 
     def recommend(self, user_idx: int, top_k: int = 10, seen_movie_idxs: list = None) -> list:
         seen = set(seen_movie_idxs or [])
-        candidates = [m for m in range(self.n_movies) if m not in seen]
-        scores = [(m, self.predict(user_idx, m)) for m in candidates]
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return [m for m, _ in scores[:top_k]]
+        trainset = self.model.trainset
+        try:
+            inner_uid = trainset.to_inner_uid(user_idx)
+        except ValueError:
+            return []  # unknown user
+        user_vec = self.model.pu[inner_uid]  # (n_factors,)
+        item_vecs = self.model.qi             # (n_movies, n_factors)
+        scores = item_vecs @ user_vec + self.model.bi + self.model.bu[inner_uid]
+        movie_scores = [
+            (trainset.to_raw_iid(inner_iid), float(scores[inner_iid]))
+            for inner_iid in range(trainset.n_items)
+            if trainset.to_raw_iid(inner_iid) not in seen
+        ]
+        movie_scores.sort(key=lambda x: x[1], reverse=True)
+        return [m for m, _ in movie_scores[:top_k]]
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
