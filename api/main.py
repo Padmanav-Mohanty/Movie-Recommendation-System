@@ -43,6 +43,7 @@ from config import MODELS_DIR, SPLITS_DIR
 from src.evaluation.metrics import build_ground_truth, evaluate_recommendations
 from src.serving.recommender import BaseRecommender, load_recommender
 
+
 # ── Model download (Render: fetch from MODEL_ARTIFACT_BASE_URL at startup) ────
 def _download_model_artifacts() -> None:
     """
