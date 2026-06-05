@@ -1,8 +1,8 @@
 from .build_features import (
-                             build_interaction_matrix,
-                             build_item_features,
-                             build_user_features,
-                             run_feature_pipeline,
+    build_interaction_matrix,
+    build_item_features,
+    build_user_features,
+    run_feature_pipeline,
 )
 
 __all__ = [

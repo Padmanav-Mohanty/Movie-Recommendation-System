@@ -44,9 +44,7 @@ class UserBasedCF:
         sim_scores = self.user_sim[user_idx]  # (n_users,)
         top_n_idx = np.argsort(sim_scores)[::-1][: self.n_neighbors]
 
-        neighbour_ratings = (
-            self.interaction_mat[top_n_idx, movie_idx].toarray().flatten()
-        )
+        neighbour_ratings = self.interaction_mat[top_n_idx, movie_idx].toarray().flatten()
         neighbour_sims = sim_scores[top_n_idx]
 
         mask = neighbour_ratings > 0
@@ -61,25 +59,18 @@ class UserBasedCF:
     def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
         """Predict ratings for a DataFrame with user_idx and movie_idx columns."""
         return np.array(
-            [
-                self.predict(row.user_idx, row.movie_idx)
-                for row in df.itertuples(index=False)
-            ]
+            [self.predict(row.user_idx, row.movie_idx) for row in df.itertuples(index=False)]
         )
 
     # ── Recommend ─────────────────────────────────────────────────────────────
 
-    def recommend(
-        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
-    ) -> list[int]:
+    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
         """Return top-K movie indices for a user."""
         sim_scores = self.user_sim[user_idx]
         top_n_idx = np.argsort(sim_scores)[::-1][: self.n_neighbors]
 
         # Weighted sum of neighbour rating vectors
-        neighbour_mat = self.interaction_mat[
-            top_n_idx
-        ].toarray()  # (n_neighbours, n_movies)
+        neighbour_mat = self.interaction_mat[top_n_idx].toarray()  # (n_neighbours, n_movies)
         weights = sim_scores[top_n_idx].reshape(-1, 1)
         weighted_scores = (weights * neighbour_mat).sum(axis=0)  # (n_movies,)
 
