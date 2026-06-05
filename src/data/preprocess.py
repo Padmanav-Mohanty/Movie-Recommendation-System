@@ -60,7 +60,7 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
       - next 10%                        → validation
       - remainder                       → train
     """
-    df = df.sort_values(["user_id", "rating"]).reset_index(drop=True)
+    df = df.sort_values(["user_id", "timestamp"]).reset_index(drop=True)
 
     test_rows, val_rows, train_rows = [], [], []
 
