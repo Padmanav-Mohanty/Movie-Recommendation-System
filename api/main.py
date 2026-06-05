@@ -307,21 +307,15 @@ def user_history(
     """Return movies rated by a user (from the training split)."""
     if _train_df is None:
         raise HTTPException(status_code=503, detail="Data not loaded.")
-    
-    # 1. Filter by user first
-    user_data = _train_df[_train_df["user_idx"] == user_idx]
-    
-    # 2. Check if the user exists/has history BEFORE sorting
-    if user_data.empty:
+    rows = (
+        _train_df[_train_df["user_idx"] == user_idx]
+        .sort_values("timestamp", ascending=False)
+        .head(limit)
+    )
+    if rows.empty:
         raise HTTPException(status_code=404, detail=f"User {user_idx} not found.")
-    
-    # 3. Double check your column name. 
-    # If the KeyError persists, change "timestamp" below to whatever 
-    # print(_train_df.columns) reveals (e.g., 'timestamp_v2', 'time', etc.)
-    rows = user_data.sort_values("timestamp", ascending=False).head(limit)
-    
     records = rows[["movie_idx", "title", "rating", "genres"]].to_dict(orient="records")
-    return {"user_idx": user_idx, "n_ratings": len(user_data), "history": records}
+    return {"user_idx": user_idx, "n_ratings": len(rows), "history": records}
 
 
 @app.get("/movies/{movie_idx}", tags=["Movies"])
