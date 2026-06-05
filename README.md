@@ -1,3 +1,13 @@
+---
+title: Movie Recommendation System
+emoji: 🎬
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🎬 Movie Recommendation System
 
 > **Production-grade, end-to-end recommender system** built on the [MovieLens dataset](https://huggingface.co/datasets/ashraq/movielens_ratings) — from raw ratings to a containerised REST API serving three distinct model families across 940k ratings, 29k users, and 7.6k movies.
