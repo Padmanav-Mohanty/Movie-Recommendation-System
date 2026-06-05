@@ -50,9 +50,7 @@ def ndcg_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
     """Normalised Discounted Cumulative Gain at K."""
     rec_k = recommended[:k]
     dcg = sum(
-        1.0 / np.log2(i + 2)
-        for i, item in enumerate(rec_k)
-        if item in set(relevant)
+        1.0 / np.log2(i + 2) for i, item in enumerate(rec_k) if item in set(relevant)
     )
     idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(relevant), k)))
     return dcg / idcg if idcg > 0 else 0.0
@@ -79,16 +77,16 @@ def mean_average_precision(
     return float(
         np.mean(
             [
-                average_precision(
-                    recommendations.get(u, []), ground_truth.get(u, [])
-                )
+                average_precision(recommendations.get(u, []), ground_truth.get(u, []))
                 for u in ground_truth
             ]
         )
     )
 
 
-def mrr(recommendations: dict[int, list[int]], ground_truth: dict[int, list[int]]) -> float:
+def mrr(
+    recommendations: dict[int, list[int]], ground_truth: dict[int, list[int]]
+) -> float:
     """Mean Reciprocal Rank."""
     rr_scores = []
     for u, relevant in ground_truth.items():
