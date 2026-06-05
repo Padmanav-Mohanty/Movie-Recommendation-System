@@ -49,9 +49,7 @@ def hit_rate_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
 def ndcg_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
     """Normalised Discounted Cumulative Gain at K."""
     rec_k = recommended[:k]
-    dcg = sum(
-        1.0 / np.log2(i + 2) for i, item in enumerate(rec_k) if item in set(relevant)
-    )
+    dcg = sum(1.0 / np.log2(i + 2) for i, item in enumerate(rec_k) if item in set(relevant))
     idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(relevant), k)))
     return dcg / idcg if idcg > 0 else 0.0
 
@@ -84,9 +82,7 @@ def mean_average_precision(
     )
 
 
-def mrr(
-    recommendations: dict[int, list[int]], ground_truth: dict[int, list[int]]
-) -> float:
+def mrr(recommendations: dict[int, list[int]], ground_truth: dict[int, list[int]]) -> float:
     """Mean Reciprocal Rank."""
     rr_scores = []
     for u, relevant in ground_truth.items():
@@ -103,9 +99,7 @@ def mrr(
 # ── Beyond-accuracy metrics ───────────────────────────────────────────────────
 
 
-def catalogue_coverage_at_k(
-    recommendations: dict[int, list[int]], n_items: int, k: int
-) -> float:
+def catalogue_coverage_at_k(recommendations: dict[int, list[int]], n_items: int, k: int) -> float:
     """
     Percentage of the catalogue recommended to at least one user.
 
@@ -144,9 +138,7 @@ def novelty_at_k(
 # ── Convenience helpers ───────────────────────────────────────────────────────
 
 
-def build_ground_truth(
-    df: pd.DataFrame, min_rating: float = 4.0
-) -> dict[int, list[int]]:
+def build_ground_truth(df: pd.DataFrame, min_rating: float = 4.0) -> dict[int, list[int]]:
     """
     Build a ground-truth dict from a ratings DataFrame.
 
@@ -154,12 +146,7 @@ def build_ground_truth(
     -------
     {user_idx: [movie_idx, ...]}  — items rated >= min_rating
     """
-    return (
-        df[df["rating"] >= min_rating]
-        .groupby("user_idx")["movie_idx"]
-        .apply(list)
-        .to_dict()
-    )
+    return df[df["rating"] >= min_rating].groupby("user_idx")["movie_idx"].apply(list).to_dict()
 
 
 def evaluate_recommendations(
@@ -207,9 +194,7 @@ def evaluate_recommendations(
         if n_items is not None:
             row["Coverage@K"] = catalogue_coverage_at_k(recommendations, n_items, k)
         if item_popularity is not None and n_users is not None:
-            row["Novelty@K"] = novelty_at_k(
-                recommendations, item_popularity, n_users, k
-            )
+            row["Novelty@K"] = novelty_at_k(recommendations, item_popularity, n_users, k)
 
         results.append(row)
 
