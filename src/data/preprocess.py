@@ -81,9 +81,7 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     val = pd.concat(val_rows).reset_index(drop=True) if val_rows else empty
     test = pd.concat(test_rows).reset_index(drop=True) if test_rows else empty
 
-    print(
-        f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}"
-    )
+    print(f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}")
     return train, val, test
 
 
@@ -129,6 +127,4 @@ if __name__ == "__main__":
 
     print(f"\n✓ Done — {data['n_users']:,} users | {data['n_movies']:,} movies")
     print("\nTrain sample:")
-    print(
-        data["train"][["user_id", "movie_id", "rating", "user_idx", "movie_idx"]].head()
-    )
+    print(data["train"][["user_id", "movie_id", "rating", "user_idx", "movie_idx"]].head())

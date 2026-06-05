@@ -66,9 +66,7 @@ def build_user_features(train: pd.DataFrame) -> pd.DataFrame:
 
     user_features = user_stats.merge(genre_affinity, on="user_idx", how="left")
 
-    print(
-        f"User features  : {user_features.shape[0]:,} users × {user_features.shape[1]} features"
-    )
+    print(f"User features  : {user_features.shape[0]:,} users × {user_features.shape[1]} features")
     return user_features
 
 
@@ -96,12 +94,8 @@ def build_item_features(train: pd.DataFrame) -> pd.DataFrame:
     item_stats["log_n_ratings"] = np.log1p(item_stats["n_ratings"])
 
     # Release year from title e.g. "Toy Story (1995)"
-    movie_meta = (
-        train[["movie_idx", "title", "genre_list"]].drop_duplicates("movie_idx").copy()
-    )
-    movie_meta["year"] = (
-        movie_meta["title"].str.extract(r"\((\d{4})\)$").astype(float).fillna(0)
-    )
+    movie_meta = train[["movie_idx", "title", "genre_list"]].drop_duplicates("movie_idx").copy()
+    movie_meta["year"] = movie_meta["title"].str.extract(r"\((\d{4})\)$").astype(float).fillna(0)
 
     # One-hot genres
     mlb = MultiLabelBinarizer(classes=ALL_GENRES)
@@ -114,18 +108,14 @@ def build_item_features(train: pd.DataFrame) -> pd.DataFrame:
 
     item_features = item_stats.merge(movie_meta, on="movie_idx", how="left")
 
-    print(
-        f"Item features  : {item_features.shape[0]:,} movies × {item_features.shape[1]} features"
-    )
+    print(f"Item features  : {item_features.shape[0]:,} movies × {item_features.shape[1]} features")
     return item_features
 
 
 # ── Interaction matrix ────────────────────────────────────────────────────────
 
 
-def build_interaction_matrix(
-    df: pd.DataFrame, n_users: int, n_movies: int
-) -> np.ndarray:
+def build_interaction_matrix(df: pd.DataFrame, n_users: int, n_movies: int) -> np.ndarray:
     """Sparse-friendly dense interaction matrix (users × movies)."""
     from scipy.sparse import csr_matrix
 
@@ -133,9 +123,7 @@ def build_interaction_matrix(
         (df["rating"].values, (df["user_idx"].values, df["movie_idx"].values)),
         shape=(n_users, n_movies),
     )
-    print(
-        f"Interaction matrix : {mat.shape} | sparsity {1 - mat.nnz / (n_users * n_movies):.4%}"
-    )
+    print(f"Interaction matrix : {mat.shape} | sparsity {1 - mat.nnz / (n_users * n_movies):.4%}")
     return mat
 
 
