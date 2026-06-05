@@ -222,27 +222,6 @@ def _configured_model_artifacts() -> list[str]:
     return list(dict.fromkeys(artifacts))
 
 
-def download_model_artifacts() -> None:
-    """Download missing model artifacts from an HTTP/S3-presigned base URL."""
-    base_url = os.getenv("MODEL_ARTIFACT_BASE_URL", "").strip()
-    if not base_url:
-        return
-
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    for filename in _configured_model_artifacts():
-        target = MODELS_DIR / filename
-        if target.exists():
-            log.info("Model artifact already exists: %s", target)
-            continue
-
-        artifact_url = urljoin(f"{base_url.rstrip('/')}/", filename)
-        log.info("Downloading model artifact %s", filename)
-        try:
-            urlretrieve(artifact_url, target)
-        except (HTTPError, URLError, OSError) as exc:
-            target.unlink(missing_ok=True)
-            raise RuntimeError(f"Could not download model artifact {filename}: {exc}") from exc
-
 def get_recommender(model_name: str) -> BaseRecommender:
     if model_name not in AVAILABLE_MODELS:
         raise HTTPException(
