@@ -76,6 +76,7 @@ def _download_model_artifacts() -> None:
             log.error("Failed to download %s: %s", filename, exc)
             raise RuntimeError(f"Could not fetch required model artifact: {filename}") from exc
 
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -103,7 +104,6 @@ MODEL_ARTIFACT_FILENAMES = {
 _startup_started_at = time.time()
 _startup_complete = False
 _startup_error: str | None = None
-
 
 
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
@@ -224,6 +224,7 @@ def download_model_artifacts() -> None:
         except (HTTPError, URLError, OSError) as exc:
             target.unlink(missing_ok=True)
             raise RuntimeError(f"Could not download model artifact {filename}: {exc}") from exc
+
 
 def get_recommender(model_name: str) -> BaseRecommender:
     if model_name not in AVAILABLE_MODELS:
