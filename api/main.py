@@ -61,7 +61,9 @@ _test_df:     Optional[pd.DataFrame] = None
 _movie_meta:  Optional[pd.DataFrame] = None          # movie_idx → title, genres
 _recommenders: Dict[str, BaseRecommender] = {}
 
-AVAILABLE_MODELS = ["cf", "svd", "two_tower"]
+# cf excluded (6.9GB model); two_tower available but memory-heavy on free tier
+AVAILABLE_MODELS = ["svd", "two_tower"]
+LIGHT_MODELS     = ["svd"]  # pre-warm only these on free tier
 DEFAULT_MODEL     = os.getenv("DEFAULT_MODEL", "svd")
 
 
@@ -70,14 +72,23 @@ DEFAULT_MODEL     = os.getenv("DEFAULT_MODEL", "svd")
 async def lifespan(app: FastAPI):
     """Load shared data on startup; release on shutdown."""
     global _train_df, _test_df, _movie_meta
+    import gc
     try:
-        _train_df   = pd.read_parquet(SPLITS_DIR / "train.parquet")
-        _test_df    = pd.read_parquet(SPLITS_DIR / "test.parquet")
+        # Load only essential columns to minimise memory on free-tier hosts
+        _train_df = pd.read_parquet(
+            SPLITS_DIR / "train.parquet",
+            columns=["user_idx", "movie_idx", "movie_id", "title", "genres", "rating"],
+        )
+        _test_df = pd.read_parquet(
+            SPLITS_DIR / "test.parquet",
+            columns=["user_idx", "movie_idx", "rating"],
+        )
         _movie_meta = (
             _train_df[["movie_idx", "movie_id", "title", "genres"]]
             .drop_duplicates("movie_idx")
             .set_index("movie_idx")
         )
+        gc.collect()
         log.info("Loaded train (%s rows) and test (%s rows)",
                  f"{len(_train_df):,}", f"{len(_test_df):,}")
     except FileNotFoundError:
