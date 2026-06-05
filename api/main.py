@@ -372,7 +372,7 @@ class ABTestRequest(BaseModel):
     user_idx: int = Field(..., ge=0, description="User index (0-based)")
     top_k: int = Field(10, ge=1, le=100)
     model_a: str = Field("svd", description="First model: 'cf' | 'svd' | 'two_tower'")
-    model_b: str = Field("cf", description="Second model: 'cf' | 'svd' | 'two_tower'")
+    model_b: str = Field("two_tower", description="Second model: 'svd' | 'two_tower'")
     exclude_seen: bool = Field(True)
 
     model_config = {
