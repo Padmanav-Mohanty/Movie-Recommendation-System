@@ -39,16 +39,18 @@ from pydantic import BaseModel, Field
 # ── Make src/ importable when running from repo root ─────────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import MODELS_DIR, SPLITS_DIR
+from config import MODELS_DIR, SPLITS_DIR, PROCESSED_DIR
 from src.evaluation.metrics import build_ground_truth, evaluate_recommendations
 from src.serving.recommender import BaseRecommender, load_recommender
 
-
 # ── Model download (Render: fetch from MODEL_ARTIFACT_BASE_URL at startup) ────
+# ── Model download (fetch from MODEL_ARTIFACT_BASE_URL at startup) ────────────
 def _download_model_artifacts() -> None:
     """
-    If MODEL_ARTIFACT_BASE_URL is set, download any missing model files listed
-    in MODEL_ARTIFACTS (comma-separated filenames) into MODELS_DIR.
+    If MODEL_ARTIFACT_BASE_URL is set, download any missing files listed
+    in MODEL_ARTIFACTS (comma-separated) into the correct local directory:
+      - *_model.pkl / *.pt / *.bin  → MODELS_DIR
+      - *.parquet / *.npz           → matched by filename to SPLITS_DIR or PROCESSED_DIR
     Safe to call every startup — skips files that already exist on disk.
     """
     import urllib.request
@@ -61,9 +63,24 @@ def _download_model_artifacts() -> None:
         return
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    SPLITS_DIR.mkdir(parents=True, exist_ok=True)
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Map filenames to their target directories
+    splits_files = {"train.parquet", "test.parquet", "val.parquet"}
+    processed_files = {
+        "interaction_matrix.npz", "item_features.parquet",
+        "movie2idx.parquet", "user2idx.parquet", "user_features.parquet"
+    }
 
     for filename in [f.strip() for f in artifacts.split(",") if f.strip()]:
-        dest = MODELS_DIR / filename
+        if filename in splits_files:
+            dest = SPLITS_DIR / filename
+        elif filename in processed_files:
+            dest = PROCESSED_DIR / filename
+        else:
+            dest = MODELS_DIR / filename
+
         if dest.exists():
             log.info("Artifact already present, skipping: %s", filename)
             continue
@@ -75,8 +92,6 @@ def _download_model_artifacts() -> None:
         except Exception as exc:
             log.error("Failed to download %s: %s", filename, exc)
             raise RuntimeError(f"Could not fetch required model artifact: {filename}") from exc
-
-
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -106,12 +121,15 @@ _startup_complete = False
 _startup_error: str | None = None
 
 
+
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load shared data on startup; release on shutdown."""
     global _train_df, _test_df, _movie_meta
     import gc
+
+    _download_model_artifacts()
 
     try:
         # Load only essential columns to minimise memory on free-tier hosts
@@ -224,7 +242,6 @@ def download_model_artifacts() -> None:
         except (HTTPError, URLError, OSError) as exc:
             target.unlink(missing_ok=True)
             raise RuntimeError(f"Could not download model artifact {filename}: {exc}") from exc
-
 
 def get_recommender(model_name: str) -> BaseRecommender:
     if model_name not in AVAILABLE_MODELS:
