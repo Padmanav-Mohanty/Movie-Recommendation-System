@@ -26,9 +26,9 @@ coverage.xml
 .mypy_cache
 .ruff_cache
 
-# Data & models (mount as volumes in compose)
-data/
-models/
+
+
+
 
 # Notebooks
 notebooks/
