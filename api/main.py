@@ -372,28 +372,26 @@ def list_models():
 def recommend(req: RecommendRequest):
     rec   = get_recommender(req.model)
     recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
-    
+
     items = []
     for idx in recs:
         movie = enrich_movie(idx)
-        # Get predicted score if model supports it
         score = 0.0
         inner = getattr(rec, "_model", None)
         if inner and hasattr(inner, "predict"):
             try:
-                pred = inner.predict(req.user_idx, idx)
-                score = round(float(pred.est if hasattr(pred, "est") else pred), 3)
-            except Exception:
+                score = round(float(inner.predict(req.user_idx, idx)), 3)
+            except Exception as e:
+                log.warning("Score prediction failed for user=%s movie=%s: %s", req.user_idx, idx, e)
                 score = 0.0
         items.append(MovieResult(**movie.model_dump(), score=score))
-    
+
     return RecommendResponse(
         user_idx=req.user_idx,
         model=req.model,
         top_k=req.top_k,
         recommendations=items,
     )
-
 
 @app.post("/ratings/predict", response_model=PredictResponse, tags=["Recommendations"])
 def predict_rating(req: PredictRequest):
