@@ -346,32 +346,27 @@ def list_models():
         ]
     }
 
+@app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
+def _score_for(rec: BaseRecommender, user_idx: int, movie_idx: int) -> float:
+    """Try to get a predicted score; return 0.0 on failure."""
+    inner = getattr(rec, "_model", None)
+    if inner is not None and hasattr(inner, "predict"):
+        try:
+            return round(float(inner.predict(user_idx, movie_idx)), 3)
+        except Exception as exc:
+            log.warning("Score failed for user=%s movie=%s: %s", user_idx, movie_idx, exc)
+    return 0.0
 
-@app.post("/recommendations", response_model=RecommendResponse)
 def recommend(req: RecommendRequest):
-    rec   = get_recommender(req.model)
-    recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    """Return top-K movie recommendations for a user."""
+    rec = get_recommender(req.model)
+    recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
 
     items = []
-    for idx in recs[:1]:  # just first item for debug
+    for idx in recs:
         movie = enrich_movie(idx)
-        inner = getattr(rec, "_model", None)
-        log.info("DEBUG rec_type=%s inner=%s has_predict=%s",
-                 type(rec).__name__,
-                 type(inner).__name__ if inner else None,
-                 hasattr(inner, "predict") if inner else False)
-        score = 0.0
-        if inner and hasattr(inner, "predict"):
-            try:
-                score = round(float(inner.predict(req.user_idx, idx)), 3)
-            except Exception as e:
-                log.warning("Score failed: %s", e)
+        score = _score_for(rec, req.user_idx, idx)
         items.append(MovieResult(**movie.model_dump(), score=score))
-
-    # rest of items without score for now
-    for idx in recs[1:]:
-        movie = enrich_movie(idx)
-        items.append(MovieResult(**movie.model_dump(), score=0.0))
 
     return RecommendResponse(
         user_idx=req.user_idx,
