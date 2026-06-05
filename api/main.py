@@ -307,7 +307,11 @@ def user_history(
     """Return movies rated by a user (from the training split)."""
     if _train_df is None:
         raise HTTPException(status_code=503, detail="Data not loaded.")
-    rows = _train_df[_train_df["user_idx"] == user_idx].head(limit)
+    rows = (
+        _train_df[_train_df["user_idx"] == user_idx]
+        .sort_values("timestamp", ascending=False)
+        .head(limit)
+    )
     if rows.empty:
         raise HTTPException(status_code=404, detail=f"User {user_idx} not found.")
     records = rows[["movie_idx", "title", "rating", "genres"]].to_dict(orient="records")
