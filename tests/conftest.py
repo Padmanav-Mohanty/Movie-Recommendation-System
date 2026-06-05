@@ -73,7 +73,10 @@ def test_df(ratings_df, train_df) -> pd.DataFrame:
 @pytest.fixture(scope="session")
 def interaction_matrix(train_df) -> csr_matrix:
     return csr_matrix(
-        (train_df["rating"].values, (train_df["user_idx"].values, train_df["movie_idx"].values)),
+        (
+            train_df["rating"].values,
+            (train_df["user_idx"].values, train_df["movie_idx"].values),
+        ),
         shape=(N_USERS, N_MOVIES),
     )
 

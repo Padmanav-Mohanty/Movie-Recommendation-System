@@ -7,14 +7,7 @@ import pandas as pd
 from surprise import NMF, SVD, Dataset, Reader
 from surprise.model_selection import cross_validate
 
-from config import (
-    MODELS_DIR,
-    SPLITS_DIR,
-    SVD_LR,
-    SVD_N_EPOCHS,
-    SVD_N_FACTORS,
-    SVD_REG,
-)
+from config import MODELS_DIR, SPLITS_DIR, SVD_LR, SVD_N_EPOCHS, SVD_N_FACTORS, SVD_REG
 
 
 def df_to_surprise(df: pd.DataFrame) -> Dataset:
@@ -33,11 +26,15 @@ class MatrixFactorization:
     ):
         self.algorithm = algorithm
         self.n_movies = 0
-        self.params = dict(n_factors=n_factors, n_epochs=n_epochs, lr_all=lr_all, reg_all=reg_all)
+        self.params = dict(
+            n_factors=n_factors, n_epochs=n_epochs, lr_all=lr_all, reg_all=reg_all
+        )
         if algorithm == "svd":
             self.model = SVD(**self.params, random_state=42, verbose=False)
         elif algorithm == "nmf":
-            self.model = NMF(n_factors=n_factors, n_epochs=n_epochs, random_state=42, verbose=False)
+            self.model = NMF(
+                n_factors=n_factors, n_epochs=n_epochs, random_state=42, verbose=False
+            )
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
@@ -59,7 +56,10 @@ class MatrixFactorization:
 
     def predict_batch(self, df: pd.DataFrame) -> np.ndarray:
         return np.array(
-            [self.predict(row.user_idx, row.movie_idx) for row in df.itertuples(index=False)]
+            [
+                self.predict(row.user_idx, row.movie_idx)
+                for row in df.itertuples(index=False)
+            ]
         )
 
     def recommend(
@@ -97,11 +97,15 @@ class MatrixFactorization:
             return pickle.load(f)
 
 
-def evaluate(model, val_df: pd.DataFrame, train_df: pd.DataFrame, sample_n: int = 5000) -> dict:
+def evaluate(
+    model, val_df: pd.DataFrame, train_df: pd.DataFrame, sample_n: int = 5000
+) -> dict:
     known_users = set(train_df["user_idx"].unique())
     known_movies = set(train_df["movie_idx"].unique())
 
-    filtered = val_df[val_df["user_idx"].isin(known_users) & val_df["movie_idx"].isin(known_movies)]
+    filtered = val_df[
+        val_df["user_idx"].isin(known_users) & val_df["movie_idx"].isin(known_movies)
+    ]
     sample = filtered.sample(min(sample_n, len(filtered)), random_state=42)
     preds = model.predict_batch(sample)
     y_true = sample["rating"].values
@@ -113,7 +117,9 @@ def evaluate(model, val_df: pd.DataFrame, train_df: pd.DataFrame, sample_n: int 
 
 def compare_algorithms(train_df: pd.DataFrame) -> pd.DataFrame:
     reader = Reader(rating_scale=(0.5, 5.0))
-    dataset = Dataset.load_from_df(train_df[["user_idx", "movie_idx", "rating"]], reader)
+    dataset = Dataset.load_from_df(
+        train_df[["user_idx", "movie_idx", "rating"]], reader
+    )
     results = []
     for name, algo in [
         (
@@ -138,7 +144,9 @@ def compare_algorithms(train_df: pd.DataFrame) -> pd.DataFrame:
         ),
     ]:
         print(f"Cross-validating {name}...")
-        cv = cross_validate(algo, dataset, measures=["RMSE", "MAE"], cv=3, verbose=False, n_jobs=-1)
+        cv = cross_validate(
+            algo, dataset, measures=["RMSE", "MAE"], cv=3, verbose=False, n_jobs=-1
+        )
         results.append(
             {
                 "algorithm": name,

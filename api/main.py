@@ -37,10 +37,7 @@ from pydantic import BaseModel, Field
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import MODELS_DIR, SPLITS_DIR
-from src.evaluation.metrics import (
-    build_ground_truth,
-    evaluate_recommendations,
-)
+from src.evaluation.metrics import build_ground_truth, evaluate_recommendations
 from src.serving.recommender import BaseRecommender, load_recommender
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -72,10 +69,16 @@ async def lifespan(app: FastAPI):
 
     try:
         # Load only essential columns to minimise memory on free-tier hosts
-        _train_df = pd.read_parquet(
-            SPLITS_DIR / "train.parquet",
-            columns=["user_idx", "movie_idx", "movie_id", "title", "genres", "rating"],
-        )
+        train_columns = ["user_idx", "movie_idx", "movie_id", "title", "genres", "rating"]
+        try:
+            _train_df = pd.read_parquet(
+                SPLITS_DIR / "train.parquet",
+                columns=[*train_columns, "timestamp"],
+            )
+        except Exception as exc:
+            if "timestamp" not in str(exc):
+                raise
+            _train_df = pd.read_parquet(SPLITS_DIR / "train.parquet", columns=train_columns)
         _test_df = pd.read_parquet(
             SPLITS_DIR / "test.parquet",
             columns=["user_idx", "movie_idx", "rating"],
@@ -87,7 +90,9 @@ async def lifespan(app: FastAPI):
         )
         gc.collect()
         log.info(
-            "Loaded train (%s rows) and test (%s rows)", f"{len(_train_df):,}", f"{len(_test_df):,}"
+            "Loaded train (%s rows) and test (%s rows)",
+            f"{len(_train_df):,}",
+            f"{len(_test_df):,}",
         )
     except FileNotFoundError:
         log.warning("Data splits not found — run preprocessing first.")
@@ -127,7 +132,11 @@ async def add_process_time_header(request: Request, call_next):
     elapsed = time.perf_counter() - start
     response.headers["X-Process-Time-Ms"] = f"{elapsed * 1000:.2f}"
     log.info(
-        "%s %s  %s  %.1fms", request.method, request.url.path, response.status_code, elapsed * 1000
+        "%s %s  %s  %.1fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed * 1000,
     )
     return response
 
@@ -178,7 +187,12 @@ class RecommendRequest(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "example": {"user_idx": 0, "top_k": 10, "model": "svd", "exclude_seen": True}
+            "example": {
+                "user_idx": 0,
+                "top_k": 10,
+                "model": "svd",
+                "exclude_seen": True,
+            }
         }
     }
 
@@ -202,7 +216,9 @@ class PredictRequest(BaseModel):
     model: str = Field("svd")
 
     model_config = {
-        "json_schema_extra": {"example": {"user_idx": 0, "movie_idx": 50, "model": "svd"}}
+        "json_schema_extra": {
+            "example": {"user_idx": 0, "movie_idx": 50, "model": "svd"}
+        }
     }
 
 
@@ -262,12 +278,16 @@ def list_models():
     }
 
 
-@app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
+@app.post(
+    "/recommendations", response_model=RecommendResponse, tags=["Recommendations"]
+)
 def recommend(req: RecommendRequest):
     """Return top-K movie recommendations for a user."""
     rec = get_recommender(req.model)
     try:
-        recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+        recs = rec.recommend(
+            req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     items = [enrich_movie(idx) for idx in recs]
@@ -307,13 +327,12 @@ def user_history(
     """Return movies rated by a user (from the training split)."""
     if _train_df is None:
         raise HTTPException(status_code=503, detail="Data not loaded.")
-    rows = (
-        _train_df[_train_df["user_idx"] == user_idx]
-        .sort_values("timestamp", ascending=False)
-        .head(limit)
-    )
+    rows = _train_df[_train_df["user_idx"] == user_idx]
     if rows.empty:
         raise HTTPException(status_code=404, detail=f"User {user_idx} not found.")
+    if "timestamp" in rows.columns:
+        rows = rows.sort_values("timestamp", ascending=False, kind="stable")
+    rows = rows.head(limit)
     records = rows[["movie_idx", "title", "rating", "genres"]].to_dict(orient="records")
     return {"user_idx": user_idx, "n_ratings": len(rows), "history": records}
 
@@ -332,7 +351,9 @@ def evaluate_model(
     model: str = Query("svd", description="Model to evaluate"),
     n_users: int = Query(200, ge=10, le=2000),
     top_k: int = Query(10, ge=1, le=50),
-    min_rating: float = Query(3.5, ge=0.5, le=5.0, description="Min rating to count as 'relevant'"),
+    min_rating: float = Query(
+        3.5, ge=0.5, le=5.0, description="Min rating to count as 'relevant'"
+    ),
 ):
     """
     Evaluate a model on the held-out test split.
@@ -427,8 +448,12 @@ def ab_test(req: ABTestRequest):
     rec_a = get_recommender(req.model_a)
     rec_b = get_recommender(req.model_b)
 
-    recs_a = rec_a.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
-    recs_b = rec_b.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    recs_a = rec_a.recommend(
+        req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
+    )
+    recs_b = rec_b.recommend(
+        req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
+    )
 
     set_a, set_b = set(recs_a), set(recs_b)
     overlap_idxs = set_a & set_b
