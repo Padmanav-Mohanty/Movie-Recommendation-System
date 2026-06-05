@@ -161,6 +161,9 @@ def evaluate_recommendations(
         Precision@K, Recall@K, NDCG@K, HitRate@K, MAP, MRR,
         Coverage@K (if n_items provided), Novelty@K (if item_popularity provided)
     """
+    _map = mean_average_precision(recommendations, ground_truth)
+    _mrr = mrr(recommendations, ground_truth)
+
     results = []
     for k in k_values:
         p_scores, r_scores, n_scores, hr_scores = [], [], [], []
@@ -175,11 +178,11 @@ def evaluate_recommendations(
         row: dict[str, float] = {
             "K": k,
             "Precision@K": float(np.mean(p_scores)),
-            "Recall@K": float(np.mean(r_scores)),
-            "NDCG@K": float(np.mean(n_scores)),
-            "HitRate@K": float(np.mean(hr_scores)),
-            "MAP": mean_average_precision(recommendations, ground_truth),
-            "MRR": mrr(recommendations, ground_truth),
+            "Recall@K":    float(np.mean(r_scores)),
+            "NDCG@K":      float(np.mean(n_scores)),
+            "HitRate@K":   float(np.mean(hr_scores)),
+            "MAP": _map,
+            "MRR": _mrr,
         }
 
         if n_items is not None:
