@@ -4,16 +4,15 @@ Unit tests for src/features/build_features.py
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import pytest
 from scipy.sparse import issparse
 
 from src.features.build_features import (
-    build_user_features,
-    build_item_features,
-    build_interaction_matrix,
     ALL_GENRES,
+    build_interaction_matrix,
+    build_item_features,
+    build_user_features,
 )
 
 
@@ -72,13 +71,15 @@ class TestItemFeatures:
         assert itf.isna().sum().sum() == 0
 
     def test_year_extraction(self):
-        df = pd.DataFrame({
-            "movie_idx": [0, 1],
-            "user_idx":  [0, 0],
-            "rating":    [4.0, 3.0],
-            "title":     ["Toy Story (1995)", "Unknown Movie"],
-            "genre_list": [["Animation"], ["Drama"]],
-        })
+        df = pd.DataFrame(
+            {
+                "movie_idx": [0, 1],
+                "user_idx": [0, 0],
+                "rating": [4.0, 3.0],
+                "title": ["Toy Story (1995)", "Unknown Movie"],
+                "genre_list": [["Animation"], ["Drama"]],
+            }
+        )
         itf = build_item_features(df)
         row_ts = itf[itf["movie_idx"] == 0].iloc[0]
         assert row_ts["year"] == pytest.approx(1995.0)
@@ -88,17 +89,20 @@ class TestItemFeatures:
 
 class TestInteractionMatrix:
     def test_shape(self, train_df):
-        from tests.conftest import N_USERS, N_MOVIES
+        from tests.conftest import N_MOVIES, N_USERS
+
         mat = build_interaction_matrix(train_df, N_USERS, N_MOVIES)
         assert mat.shape == (N_USERS, N_MOVIES)
 
     def test_sparse(self, train_df):
-        from tests.conftest import N_USERS, N_MOVIES
+        from tests.conftest import N_MOVIES, N_USERS
+
         mat = build_interaction_matrix(train_df, N_USERS, N_MOVIES)
         assert issparse(mat)
 
     def test_values_match(self, train_df):
-        from tests.conftest import N_USERS, N_MOVIES
+        from tests.conftest import N_MOVIES, N_USERS
+
         mat = build_interaction_matrix(train_df, N_USERS, N_MOVIES)
         # All stored values should be valid ratings
         assert (mat.data >= 0.5).all()

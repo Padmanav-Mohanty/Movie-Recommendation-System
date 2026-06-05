@@ -25,9 +25,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -38,12 +36,10 @@ from pydantic import BaseModel, Field
 # ── Make src/ importable when running from repo root ─────────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import MODELS_DIR, SPLITS_DIR, PROCESSED_DIR
+from config import MODELS_DIR, SPLITS_DIR
 from src.evaluation.metrics import (
     build_ground_truth,
     evaluate_recommendations,
-    rmse,
-    mae,
 )
 from src.serving.recommender import BaseRecommender, load_recommender
 
@@ -56,15 +52,15 @@ logging.basicConfig(
 log = logging.getLogger("api")
 
 # ── Application state ─────────────────────────────────────────────────────────
-_train_df:    Optional[pd.DataFrame] = None
-_test_df:     Optional[pd.DataFrame] = None
-_movie_meta:  Optional[pd.DataFrame] = None          # movie_idx → title, genres
-_recommenders: Dict[str, BaseRecommender] = {}
+_train_df: pd.DataFrame | None = None
+_test_df: pd.DataFrame | None = None
+_movie_meta: pd.DataFrame | None = None  # movie_idx → title, genres
+_recommenders: dict[str, BaseRecommender] = {}
 
 # cf excluded (6.9GB model); two_tower available but memory-heavy on free tier
 AVAILABLE_MODELS = ["svd", "two_tower"]
-LIGHT_MODELS     = ["svd"]  # pre-warm only these on free tier
-DEFAULT_MODEL     = os.getenv("DEFAULT_MODEL", "svd")
+LIGHT_MODELS = ["svd"]  # pre-warm only these on free tier
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "svd")
 
 
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
@@ -73,6 +69,7 @@ async def lifespan(app: FastAPI):
     """Load shared data on startup; release on shutdown."""
     global _train_df, _test_df, _movie_meta
     import gc
+
     try:
         # Load only essential columns to minimise memory on free-tier hosts
         _train_df = pd.read_parquet(
@@ -89,8 +86,9 @@ async def lifespan(app: FastAPI):
             .set_index("movie_idx")
         )
         gc.collect()
-        log.info("Loaded train (%s rows) and test (%s rows)",
-                 f"{len(_train_df):,}", f"{len(_test_df):,}")
+        log.info(
+            "Loaded train (%s rows) and test (%s rows)", f"{len(_train_df):,}", f"{len(_test_df):,}"
+        )
     except FileNotFoundError:
         log.warning("Data splits not found — run preprocessing first.")
     yield
@@ -128,9 +126,9 @@ async def add_process_time_header(request: Request, call_next):
     response = await call_next(request)
     elapsed = time.perf_counter() - start
     response.headers["X-Process-Time-Ms"] = f"{elapsed * 1000:.2f}"
-    log.info("%s %s  %s  %.1fms",
-             request.method, request.url.path,
-             response.status_code, elapsed * 1000)
+    log.info(
+        "%s %s  %s  %.1fms", request.method, request.url.path, response.status_code, elapsed * 1000
+    )
     return response
 
 
@@ -153,9 +151,7 @@ def get_recommender(model_name: str) -> BaseRecommender:
         )
     if model_name not in _recommenders:
         try:
-            _recommenders[model_name] = load_recommender(
-                model_name, train_df=_train_df
-            )
+            _recommenders[model_name] = load_recommender(model_name, train_df=_train_df)
             log.info("Loaded recommender: %s", model_name)
         except FileNotFoundError as exc:
             raise HTTPException(
@@ -173,54 +169,58 @@ def get_recommender(model_name: str) -> BaseRecommender:
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 
-class RecommendRequest(BaseModel):
-    user_idx:     int  = Field(...,    ge=0, description="User index (0-based)")
-    top_k:        int  = Field(10,    ge=1, le=100, description="Number of recommendations")
-    model:        str  = Field("svd", description="'cf' | 'svd' | 'two_tower'")
-    exclude_seen: bool = Field(True,  description="Exclude already-rated movies")
 
-    model_config = {"json_schema_extra": {"example": {
-        "user_idx": 0, "top_k": 10, "model": "svd", "exclude_seen": True
-    }}}
+class RecommendRequest(BaseModel):
+    user_idx: int = Field(..., ge=0, description="User index (0-based)")
+    top_k: int = Field(10, ge=1, le=100, description="Number of recommendations")
+    model: str = Field("svd", description="'cf' | 'svd' | 'two_tower'")
+    exclude_seen: bool = Field(True, description="Exclude already-rated movies")
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {"user_idx": 0, "top_k": 10, "model": "svd", "exclude_seen": True}
+        }
+    }
 
 
 class MovieResult(BaseModel):
     movie_idx: int
-    title:     str
-    genres:    str
+    title: str
+    genres: str
 
 
 class RecommendResponse(BaseModel):
-    user_idx:        int
-    model:           str
-    top_k:           int
-    recommendations: List[MovieResult]
+    user_idx: int
+    model: str
+    top_k: int
+    recommendations: list[MovieResult]
 
 
 class PredictRequest(BaseModel):
-    user_idx:  int = Field(..., ge=0)
+    user_idx: int = Field(..., ge=0)
     movie_idx: int = Field(..., ge=0)
-    model:     str = Field("svd")
+    model: str = Field("svd")
 
-    model_config = {"json_schema_extra": {"example": {
-        "user_idx": 0, "movie_idx": 50, "model": "svd"
-    }}}
+    model_config = {
+        "json_schema_extra": {"example": {"user_idx": 0, "movie_idx": 50, "model": "svd"}}
+    }
 
 
 class PredictResponse(BaseModel):
-    user_idx:         int
-    movie_idx:        int
+    user_idx: int
+    movie_idx: int
     predicted_rating: float
-    model:            str
+    model: str
 
 
 class HealthResponse(BaseModel):
-    status:       str
-    data_loaded:  bool
-    models_ready: List[str]
+    status: str
+    data_loaded: bool
+    models_ready: list[str]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def enrich_movie(movie_idx: int) -> MovieResult:
     if _movie_meta is not None and movie_idx in _movie_meta.index:
@@ -234,6 +234,7 @@ def enrich_movie(movie_idx: int) -> MovieResult:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 def health():
@@ -249,8 +250,8 @@ def health():
 def list_models():
     """List all models and whether their artefacts exist on disk."""
     path_map = {
-        "cf":        MODELS_DIR / "user_based_cf.pkl",
-        "svd":       MODELS_DIR / "svd_model.pkl",
+        "cf": MODELS_DIR / "user_based_cf.pkl",
+        "svd": MODELS_DIR / "svd_model.pkl",
         "two_tower": MODELS_DIR / "two_tower.pt",
     }
     return {
@@ -264,8 +265,8 @@ def list_models():
 @app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
 def recommend(req: RecommendRequest):
     """Return top-K movie recommendations for a user."""
-    rec   = get_recommender(req.model)
-    recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    rec = get_recommender(req.model)
+    recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
     items = [enrich_movie(idx) for idx in recs]
     return RecommendResponse(
         user_idx=req.user_idx,
@@ -321,11 +322,10 @@ def movie_info(movie_idx: int):
 
 @app.get("/evaluate", tags=["Evaluation"])
 def evaluate_model(
-    model:   str = Query("svd",  description="Model to evaluate"),
-    n_users: int = Query(200,    ge=10, le=2000),
-    top_k:   int = Query(10,     ge=1,  le=50),
-    min_rating: float = Query(3.5, ge=0.5, le=5.0,
-                               description="Min rating to count as 'relevant'"),
+    model: str = Query("svd", description="Model to evaluate"),
+    n_users: int = Query(200, ge=10, le=2000),
+    top_k: int = Query(10, ge=1, le=50),
+    min_rating: float = Query(3.5, ge=0.5, le=5.0, description="Min rating to count as 'relevant'"),
 ):
     """
     Evaluate a model on the held-out test split.
@@ -337,7 +337,7 @@ def evaluate_model(
         raise HTTPException(status_code=503, detail="Test data not loaded.")
 
     rec = get_recommender(model)
-    gt  = build_ground_truth(_test_df, min_rating=min_rating)
+    gt = build_ground_truth(_test_df, min_rating=min_rating)
 
     if not gt:
         raise HTTPException(
@@ -345,50 +345,60 @@ def evaluate_model(
             detail=f"No users have ratings >= {min_rating} in the test split.",
         )
 
-    user_ids  = list(gt.keys())[:n_users]
+    user_ids = list(gt.keys())[:n_users]
     recs_dict = rec.recommend_batch(user_ids, top_k=top_k)
 
     # Optional beyond-accuracy metrics
     n_items = int(_test_df["movie_idx"].max()) + 1 if _test_df is not None else None
 
     results_df = evaluate_recommendations(
-        recs_dict, gt,
+        recs_dict,
+        gt,
         k_values=[top_k],
         n_items=n_items,
     )
     return {
-        "model":    model,
-        "n_users":  len(user_ids),
-        "top_k":    top_k,
-        "metrics":  results_df.reset_index().to_dict(orient="records"),
+        "model": model,
+        "n_users": len(user_ids),
+        "top_k": top_k,
+        "metrics": results_df.reset_index().to_dict(orient="records"),
     }
 
 
 # ── A/B Testing ───────────────────────────────────────────────────────────────
 
+
 class ABTestRequest(BaseModel):
-    user_idx:     int  = Field(..., ge=0, description="User index (0-based)")
-    top_k:        int  = Field(10, ge=1, le=100)
-    model_a:      str  = Field("svd", description="First model: 'cf' | 'svd' | 'two_tower'")
-    model_b:      str  = Field("cf",  description="Second model: 'cf' | 'svd' | 'two_tower'")
+    user_idx: int = Field(..., ge=0, description="User index (0-based)")
+    top_k: int = Field(10, ge=1, le=100)
+    model_a: str = Field("svd", description="First model: 'cf' | 'svd' | 'two_tower'")
+    model_b: str = Field("cf", description="Second model: 'cf' | 'svd' | 'two_tower'")
     exclude_seen: bool = Field(True)
 
-    model_config = {"json_schema_extra": {"example": {
-        "user_idx": 42, "top_k": 10, "model_a": "svd", "model_b": "cf", "exclude_seen": True
-    }}}
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "user_idx": 42,
+                "top_k": 10,
+                "model_a": "svd",
+                "model_b": "cf",
+                "exclude_seen": True,
+            }
+        }
+    }
 
 
 class ABTestResponse(BaseModel):
-    user_idx:  int
-    top_k:     int
-    model_a:   str
-    model_b:   str
-    results_a: List[MovieResult]
-    results_b: List[MovieResult]
-    overlap:   List[MovieResult]
+    user_idx: int
+    top_k: int
+    model_a: str
+    model_b: str
+    results_a: list[MovieResult]
+    results_b: list[MovieResult]
+    overlap: list[MovieResult]
     overlap_pct: float
-    unique_to_a: List[MovieResult]
-    unique_to_b: List[MovieResult]
+    unique_to_a: list[MovieResult]
+    unique_to_b: list[MovieResult]
 
 
 @app.post("/ab-test", response_model=ABTestResponse, tags=["Recommendations"])
@@ -414,10 +424,10 @@ def ab_test(req: ABTestRequest):
     recs_b = rec_b.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
 
     set_a, set_b = set(recs_a), set(recs_b)
-    overlap_idxs    = set_a & set_b
-    unique_a_idxs   = set_a - set_b
-    unique_b_idxs   = set_b - set_a
-    overlap_pct     = len(overlap_idxs) / req.top_k * 100
+    overlap_idxs = set_a & set_b
+    unique_a_idxs = set_a - set_b
+    unique_b_idxs = set_b - set_a
+    overlap_pct = len(overlap_idxs) / req.top_k * 100
 
     return ABTestResponse(
         user_idx=req.user_idx,
