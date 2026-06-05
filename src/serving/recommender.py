@@ -167,7 +167,9 @@ class TwoTowerRecommender(BaseRecommender):
         return index
 
     def _get_user_vector(self, user_idx: int) -> np.ndarray:
-        uf_i = self._user_feat_idx.get(user_idx, 0)
+        if user_idx not in self._user_feat_idx:
+            raise ValueError(f"User {user_idx} was not seen during training (cold-start).")
+        uf_i = self._user_feat_idx[user_idx]
         u_feat = self._user_feat_mat[uf_i].unsqueeze(0)
         u_idx_t = torch.tensor([user_idx])
         with torch.no_grad():

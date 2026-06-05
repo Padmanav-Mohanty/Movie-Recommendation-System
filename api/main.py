@@ -266,7 +266,10 @@ def list_models():
 def recommend(req: RecommendRequest):
     """Return top-K movie recommendations for a user."""
     rec = get_recommender(req.model)
-    recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    try:
+        recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     items = [enrich_movie(idx) for idx in recs]
     return RecommendResponse(
         user_idx=req.user_idx,
