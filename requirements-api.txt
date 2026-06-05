@@ -1,0 +1,9 @@
+# API/runtime dependencies for the production container.
+# Training, notebooks, Streamlit, MLflow, and Torch are intentionally excluded.
+fastapi>=0.136.3
+numpy>=2.4.6
+pandas>=2.3.3
+pyarrow>=24.0.0
+scikit-surprise>=1.1.5
+scipy>=1.17.1
+uvicorn[standard]>=0.48.0

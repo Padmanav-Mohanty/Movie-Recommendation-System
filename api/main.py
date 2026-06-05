@@ -25,6 +25,9 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import urlretrieve
 
 import pandas as pd
 import uvicorn
@@ -58,6 +61,16 @@ _recommenders: dict[str, BaseRecommender] = {}
 AVAILABLE_MODELS = ["svd", "two_tower"]
 LIGHT_MODELS = ["svd"]  # pre-warm only these on free tier
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "svd")
+MODEL_ARTIFACT_FILENAMES = {
+    "cf": "user_based_cf.pkl",
+    "svd": "svd_model.pkl",
+    "two_tower": "two_tower.pt",
+    "faiss": "faiss_index.bin",
+}
+_startup_started_at = time.time()
+_startup_complete = False
+_startup_error: str | None = None
+
 
 
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
@@ -152,6 +165,33 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 # ── Model loader (lazy, cached) ───────────────────────────────────────────────
+def _configured_model_artifacts() -> list[str]:
+    raw = os.getenv("MODEL_ARTIFACTS", MODEL_ARTIFACT_FILENAMES.get(DEFAULT_MODEL, ""))
+    artifacts = [item.strip() for item in raw.split(",") if item.strip()]
+    return list(dict.fromkeys(artifacts))
+
+
+def download_model_artifacts() -> None:
+    """Download missing model artifacts from an HTTP/S3-presigned base URL."""
+    base_url = os.getenv("MODEL_ARTIFACT_BASE_URL", "").strip()
+    if not base_url:
+        return
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    for filename in _configured_model_artifacts():
+        target = MODELS_DIR / filename
+        if target.exists():
+            log.info("Model artifact already exists: %s", target)
+            continue
+
+        artifact_url = urljoin(f"{base_url.rstrip('/')}/", filename)
+        log.info("Downloading model artifact %s", filename)
+        try:
+            urlretrieve(artifact_url, target)
+        except (HTTPError, URLError, OSError) as exc:
+            target.unlink(missing_ok=True)
+            raise RuntimeError(f"Could not download model artifact {filename}: {exc}") from exc
+
 def get_recommender(model_name: str) -> BaseRecommender:
     if model_name not in AVAILABLE_MODELS:
         raise HTTPException(
