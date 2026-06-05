@@ -26,6 +26,13 @@ dependencies = [
     "uvicorn>=0.48.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+    "anyio>=4.0.0",
+]
+
 [tool.pytest.ini_options]
 testpaths    = ["tests"]
 python_files = ["test_*.py"]
