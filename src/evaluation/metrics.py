@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-# ── Rating-prediction ─────────────────────────────────────────────────────────
+# ── Rating-prediction ────────────────────────────────────────────────────────
 
 
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -49,7 +49,11 @@ def hit_rate_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
 def ndcg_at_k(recommended: list[int], relevant: list[int], k: int) -> float:
     """Normalised Discounted Cumulative Gain at K."""
     rec_k = recommended[:k]
-    dcg = sum(1.0 / np.log2(i + 2) for i, item in enumerate(rec_k) if item in set(relevant))
+    dcg = sum(
+        1.0 / np.log2(i + 2)
+        for i, item in enumerate(rec_k)
+        if item in set(relevant)
+    )
     idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(relevant), k)))
     return dcg / idcg if idcg > 0 else 0.0
 
@@ -75,7 +79,9 @@ def mean_average_precision(
     return float(
         np.mean(
             [
-                average_precision(recommendations.get(u, []), ground_truth.get(u, []))
+                average_precision(
+                    recommendations.get(u, []), ground_truth.get(u, [])
+                )
                 for u in ground_truth
             ]
         )
@@ -99,7 +105,9 @@ def mrr(recommendations: dict[int, list[int]], ground_truth: dict[int, list[int]
 # ── Beyond-accuracy metrics ───────────────────────────────────────────────────
 
 
-def catalogue_coverage_at_k(recommendations: dict[int, list[int]], n_items: int, k: int) -> float:
+def catalogue_coverage_at_k(
+    recommendations: dict[int, list[int]], n_items: int, k: int
+) -> float:
     """
     Percentage of the catalogue recommended to at least one user.
 
@@ -116,7 +124,10 @@ def catalogue_coverage_at_k(recommendations: dict[int, list[int]], n_items: int,
 
 
 def novelty_at_k(
-    recommendations: dict[int, list[int]], item_popularity: dict[int, int], n_users: int, k: int
+    recommendations: dict[int, list[int]],
+    item_popularity: dict[int, int],
+    n_users: int,
+    k: int,
 ) -> float:
     """
     Mean Self-Information (novelty) of top-K recommendations.
@@ -135,7 +146,9 @@ def novelty_at_k(
 # ── Convenience helpers ───────────────────────────────────────────────────────
 
 
-def build_ground_truth(df: pd.DataFrame, min_rating: float = 4.0) -> dict[int, list[int]]:
+def build_ground_truth(
+    df: pd.DataFrame, min_rating: float = 4.0
+) -> dict[int, list[int]]:
     """
     Build a ground-truth dict from a ratings DataFrame.
 
@@ -143,13 +156,18 @@ def build_ground_truth(df: pd.DataFrame, min_rating: float = 4.0) -> dict[int, l
     -------
     {user_idx: [movie_idx, ...]}  — items rated >= min_rating
     """
-    return df[df["rating"] >= min_rating].groupby("user_idx")["movie_idx"].apply(list).to_dict()
+    return (
+        df[df["rating"] >= min_rating]
+        .groupby("user_idx")["movie_idx"]
+        .apply(list)
+        .to_dict()
+    )
 
 
 def evaluate_recommendations(
     recommendations: dict[int, list[int]],
     ground_truth: dict[int, list[int]],
-    k_values: list[int] = (5, 10, 20),
+    k_values: list[int] | None = None,
     n_items: int | None = None,
     item_popularity: dict[int, int] | None = None,
     n_users: int | None = None,
@@ -161,6 +179,9 @@ def evaluate_recommendations(
         Precision@K, Recall@K, NDCG@K, HitRate@K, MAP, MRR,
         Coverage@K (if n_items provided), Novelty@K (if item_popularity provided)
     """
+    if k_values is None:
+        k_values = [5, 10, 20]
+
     _map = mean_average_precision(recommendations, ground_truth)
     _mrr = mrr(recommendations, ground_truth)
 
@@ -178,9 +199,9 @@ def evaluate_recommendations(
         row: dict[str, float] = {
             "K": k,
             "Precision@K": float(np.mean(p_scores)),
-            "Recall@K":    float(np.mean(r_scores)),
-            "NDCG@K":      float(np.mean(n_scores)),
-            "HitRate@K":   float(np.mean(hr_scores)),
+            "Recall@K": float(np.mean(r_scores)),
+            "NDCG@K": float(np.mean(n_scores)),
+            "HitRate@K": float(np.mean(hr_scores)),
             "MAP": _map,
             "MRR": _mrr,
         }
@@ -188,7 +209,9 @@ def evaluate_recommendations(
         if n_items is not None:
             row["Coverage@K"] = catalogue_coverage_at_k(recommendations, n_items, k)
         if item_popularity is not None and n_users is not None:
-            row["Novelty@K"] = novelty_at_k(recommendations, item_popularity, n_users, k)
+            row["Novelty@K"] = novelty_at_k(
+                recommendations, item_popularity, n_users, k
+            )
 
         results.append(row)
 
@@ -199,7 +222,7 @@ def evaluate_recommendations(
 evaluate_ranking = evaluate_recommendations
 
 
-# ── CLI smoke-test ────────────────────────────────────────────────────────────
+# ── CLI smoke-test ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import pickle
