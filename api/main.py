@@ -43,6 +43,38 @@ from config import MODELS_DIR, SPLITS_DIR
 from src.evaluation.metrics import build_ground_truth, evaluate_recommendations
 from src.serving.recommender import BaseRecommender, load_recommender
 
+# ── Model download (Render: fetch from MODEL_ARTIFACT_BASE_URL at startup) ────
+def _download_model_artifacts() -> None:
+    """
+    If MODEL_ARTIFACT_BASE_URL is set, download any missing model files listed
+    in MODEL_ARTIFACTS (comma-separated filenames) into MODELS_DIR.
+    Safe to call every startup — skips files that already exist on disk.
+    """
+    import urllib.request
+
+    base_url = os.getenv("MODEL_ARTIFACT_BASE_URL", "").rstrip("/")
+    artifacts = os.getenv("MODEL_ARTIFACTS", "")
+
+    if not base_url or not artifacts:
+        log.info("MODEL_ARTIFACT_BASE_URL not set — skipping artifact download.")
+        return
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for filename in [f.strip() for f in artifacts.split(",") if f.strip()]:
+        dest = MODELS_DIR / filename
+        if dest.exists():
+            log.info("Artifact already present, skipping: %s", filename)
+            continue
+        url = f"{base_url}/{filename}"
+        log.info("Downloading artifact: %s → %s", url, dest)
+        try:
+            urllib.request.urlretrieve(url, dest)
+            log.info("Downloaded: %s (%s bytes)", filename, dest.stat().st_size)
+        except Exception as exc:
+            log.error("Failed to download %s: %s", filename, exc)
+            raise RuntimeError(f"Could not fetch required model artifact: {filename}") from exc
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
