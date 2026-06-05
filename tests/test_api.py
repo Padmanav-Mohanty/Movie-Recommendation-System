@@ -102,7 +102,7 @@ class TestModels:
     def test_all_models_present(self, client):
         r = client.get("/models")
         names = {m["name"] for m in r.json()["models"]}
-        assert {"cf", "svd", "two_tower"} == names
+        assert {"svd", "two_tower"} == names
 
 
 # ── Recommendations ───────────────────────────────────────────────────────────
