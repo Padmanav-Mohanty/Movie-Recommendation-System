@@ -374,17 +374,25 @@ def recommend(req: RecommendRequest):
     recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
 
     items = []
-    for idx in recs:
+    for idx in recs[:1]:  # just first item for debug
         movie = enrich_movie(idx)
-        score = 0.0
         inner = getattr(rec, "_model", None)
+        log.info("DEBUG rec_type=%s inner=%s has_predict=%s",
+                 type(rec).__name__,
+                 type(inner).__name__ if inner else None,
+                 hasattr(inner, "predict") if inner else False)
+        score = 0.0
         if inner and hasattr(inner, "predict"):
             try:
                 score = round(float(inner.predict(req.user_idx, idx)), 3)
             except Exception as e:
-                log.warning("Score prediction failed for user=%s movie=%s: %s", req.user_idx, idx, e)
-                score = 0.0
+                log.warning("Score failed: %s", e)
         items.append(MovieResult(**movie.model_dump(), score=score))
+
+    # rest of items without score for now
+    for idx in recs[1:]:
+        movie = enrich_movie(idx)
+        items.append(MovieResult(**movie.model_dump(), score=0.0))
 
     return RecommendResponse(
         user_idx=req.user_idx,
