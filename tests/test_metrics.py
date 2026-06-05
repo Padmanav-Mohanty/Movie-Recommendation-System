@@ -142,9 +142,7 @@ class TestAveragePrecision:
         # hits at positions 1,3,5 → P@1=1, P@3=2/3, P@5=3/5
         # AP = (1 + 2/3 + 3/5) / 3
         expected = (1.0 + 2 / 3 + 3 / 5) / 3
-        assert average_precision([1, 2, 3, 4, 5], [1, 3, 5]) == pytest.approx(
-            expected, rel=1e-6
-        )
+        assert average_precision([1, 2, 3, 4, 5], [1, 3, 5]) == pytest.approx(expected, rel=1e-6)
 
 
 class TestMAP:

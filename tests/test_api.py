@@ -43,9 +43,7 @@ def mock_test_df(mock_train_df) -> pd.DataFrame:
 class MockRecommender:
     """Deterministic recommender for testing — returns first N movie indices."""
 
-    def recommend(
-        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
-    ) -> list[int]:
+    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
         return list(range(top_k))
 
     def recommend_batch(self, user_idxs, top_k=10, exclude_seen=True, seen_dict=None):
@@ -112,9 +110,7 @@ class TestModels:
 
 class TestRecommendations:
     def test_basic_request(self, client):
-        r = client.post(
-            "/recommendations", json={"user_idx": 0, "top_k": 3, "model": "svd"}
-        )
+        r = client.post("/recommendations", json={"user_idx": 0, "top_k": 3, "model": "svd"})
         assert r.status_code == 200
         body = r.json()
         assert body["user_idx"] == 0
@@ -122,9 +118,7 @@ class TestRecommendations:
         assert len(body["recommendations"]) == 3
 
     def test_recommendation_schema(self, client):
-        r = client.post(
-            "/recommendations", json={"user_idx": 0, "top_k": 2, "model": "svd"}
-        )
+        r = client.post("/recommendations", json={"user_idx": 0, "top_k": 2, "model": "svd"})
         recs = r.json()["recommendations"]
         for rec in recs:
             assert "movie_idx" in rec
@@ -133,9 +127,7 @@ class TestRecommendations:
 
     def test_top_k_respected(self, client):
         for k in (1, 5, 10):
-            r = client.post(
-                "/recommendations", json={"user_idx": 0, "top_k": k, "model": "svd"}
-            )
+            r = client.post("/recommendations", json={"user_idx": 0, "top_k": k, "model": "svd"})
             assert len(r.json()["recommendations"]) == k
 
     def test_invalid_model_400(self, client):
@@ -146,15 +138,11 @@ class TestRecommendations:
         assert r.status_code == 400
 
     def test_negative_user_idx_422(self, client):
-        r = client.post(
-            "/recommendations", json={"user_idx": -1, "top_k": 5, "model": "svd"}
-        )
+        r = client.post("/recommendations", json={"user_idx": -1, "top_k": 5, "model": "svd"})
         assert r.status_code == 422
 
     def test_top_k_over_limit_422(self, client):
-        r = client.post(
-            "/recommendations", json={"user_idx": 0, "top_k": 9999, "model": "svd"}
-        )
+        r = client.post("/recommendations", json={"user_idx": 0, "top_k": 9999, "model": "svd"})
         assert r.status_code == 422
 
 

@@ -216,9 +216,7 @@ class PredictRequest(BaseModel):
     model: str = Field("svd")
 
     model_config = {
-        "json_schema_extra": {
-            "example": {"user_idx": 0, "movie_idx": 50, "model": "svd"}
-        }
+        "json_schema_extra": {"example": {"user_idx": 0, "movie_idx": 50, "model": "svd"}}
     }
 
 
@@ -278,16 +276,12 @@ def list_models():
     }
 
 
-@app.post(
-    "/recommendations", response_model=RecommendResponse, tags=["Recommendations"]
-)
+@app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
 def recommend(req: RecommendRequest):
     """Return top-K movie recommendations for a user."""
     rec = get_recommender(req.model)
     try:
-        recs = rec.recommend(
-            req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
-        )
+        recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     items = [enrich_movie(idx) for idx in recs]
@@ -351,9 +345,7 @@ def evaluate_model(
     model: str = Query("svd", description="Model to evaluate"),
     n_users: int = Query(200, ge=10, le=2000),
     top_k: int = Query(10, ge=1, le=50),
-    min_rating: float = Query(
-        3.5, ge=0.5, le=5.0, description="Min rating to count as 'relevant'"
-    ),
+    min_rating: float = Query(3.5, ge=0.5, le=5.0, description="Min rating to count as 'relevant'"),
 ):
     """
     Evaluate a model on the held-out test split.
@@ -448,12 +440,8 @@ def ab_test(req: ABTestRequest):
     rec_a = get_recommender(req.model_a)
     rec_b = get_recommender(req.model_b)
 
-    recs_a = rec_a.recommend(
-        req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
-    )
-    recs_b = rec_b.recommend(
-        req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen
-    )
+    recs_a = rec_a.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    recs_b = rec_b.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
 
     set_a, set_b = set(recs_a), set(recs_b)
     overlap_idxs = set_a & set_b
