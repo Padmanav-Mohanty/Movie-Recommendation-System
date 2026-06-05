@@ -1,12 +1,6 @@
 import pandas as pd
 
-from config import (
-    MIN_MOVIE_RATINGS,
-    MIN_USER_RATINGS,
-    PROCESSED_DIR,
-    SPLITS_DIR,
-    TEST_SIZE,
-)
+from config import MIN_MOVIE_RATINGS, MIN_USER_RATINGS, PROCESSED_DIR, SPLITS_DIR, TEST_SIZE
 
 
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -60,7 +54,10 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
       - next 10%                        → validation
       - remainder                       → train
     """
-    df = df.sort_values(["user_id", "timestamp"]).reset_index(drop=True)
+    sort_columns = ["user_id"]
+    if "timestamp" in df.columns:
+        sort_columns.append("timestamp")
+    df = df.sort_values(sort_columns, kind="stable").reset_index(drop=True)
 
     test_rows, val_rows, train_rows = [], [], []
 
@@ -81,7 +78,9 @@ def split_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFra
     val = pd.concat(val_rows).reset_index(drop=True) if val_rows else empty
     test = pd.concat(test_rows).reset_index(drop=True) if test_rows else empty
 
-    print(f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}")
+    print(
+        f"Split          : train {len(train):,} | val {len(val):,} | test {len(test):,}"
+    )
     return train, val, test
 
 
@@ -127,4 +126,6 @@ if __name__ == "__main__":
 
     print(f"\n✓ Done — {data['n_users']:,} users | {data['n_movies']:,} movies")
     print("\nTrain sample:")
-    print(data["train"][["user_id", "movie_id", "rating", "user_idx", "movie_idx"]].head())
+    print(
+        data["train"][["user_id", "movie_id", "rating", "user_idx", "movie_idx"]].head()
+    )

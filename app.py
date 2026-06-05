@@ -6,9 +6,9 @@ Expects the FastAPI backend running at http://localhost:8000
 
 import os
 
-import streamlit as st
-import requests
 import pandas as pd
+import requests
+import streamlit as st
 
 # When deployed on HF Spaces, set the API_BASE_URL Space secret to your
 # Render service URL, e.g. https://movie-recommender-api.onrender.com
@@ -23,7 +23,8 @@ st.set_page_config(
 )
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
-st.markdown("""
+st.markdown(
+    """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -110,10 +111,13 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 }
 hr { border-color: #1e1e24; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 @st.cache_data(ttl=30)
 def api_health():
@@ -134,12 +138,16 @@ def api_models():
 
 
 def get_recommendations(user_idx, top_k, model, exclude_seen):
-    r = requests.post(f"{API_BASE}/recommendations", json={
-        "user_idx": user_idx,
-        "top_k": top_k,
-        "model": model,
-        "exclude_seen": exclude_seen,
-    }, timeout=10)
+    r = requests.post(
+        f"{API_BASE}/recommendations",
+        json={
+            "user_idx": user_idx,
+            "top_k": top_k,
+            "model": model,
+            "exclude_seen": exclude_seen,
+        },
+        timeout=10,
+    )
     if r.ok:
         return r.json()
     st.error(f"API error {r.status_code}: {r.json().get('detail', r.text)}")
@@ -147,18 +155,24 @@ def get_recommendations(user_idx, top_k, model, exclude_seen):
 
 
 def get_user_history(user_idx, limit=20):
-    r = requests.get(f"{API_BASE}/users/{user_idx}/history", params={"limit": limit}, timeout=5)
+    r = requests.get(
+        f"{API_BASE}/users/{user_idx}/history", params={"limit": limit}, timeout=5
+    )
     if r.ok:
         return r.json()
     return None
 
 
 def predict_rating(user_idx, movie_idx, model):
-    r = requests.post(f"{API_BASE}/ratings/predict", json={
-        "user_idx": user_idx,
-        "movie_idx": movie_idx,
-        "model": model,
-    }, timeout=5)
+    r = requests.post(
+        f"{API_BASE}/ratings/predict",
+        json={
+            "user_idx": user_idx,
+            "movie_idx": movie_idx,
+            "model": model,
+        },
+        timeout=5,
+    )
     if r.ok:
         return r.json()
     st.error(f"API error: {r.json().get('detail', r.text)}")
@@ -166,9 +180,11 @@ def predict_rating(user_idx, movie_idx, model):
 
 
 def get_evaluate(model, n_users, top_k):
-    r = requests.get(f"{API_BASE}/evaluate", params={
-        "model": model, "n_users": n_users, "top_k": top_k
-    }, timeout=60)
+    r = requests.get(
+        f"{API_BASE}/evaluate",
+        params={"model": model, "n_users": n_users, "top_k": top_k},
+        timeout=60,
+    )
     if r.ok:
         return r.json()
     st.error(f"Evaluation error: {r.json().get('detail', r.text)}")
@@ -176,13 +192,17 @@ def get_evaluate(model, n_users, top_k):
 
 
 def run_ab_test(user_idx, top_k, model_a, model_b, exclude_seen):
-    r = requests.post(f"{API_BASE}/ab-test", json={
-        "user_idx": user_idx,
-        "top_k": top_k,
-        "model_a": model_a,
-        "model_b": model_b,
-        "exclude_seen": exclude_seen,
-    }, timeout=15)
+    r = requests.post(
+        f"{API_BASE}/ab-test",
+        json={
+            "user_idx": user_idx,
+            "top_k": top_k,
+            "model_a": model_a,
+            "model_b": model_b,
+            "exclude_seen": exclude_seen,
+        },
+        timeout=15,
+    )
     if r.ok:
         return r.json()
     st.error(f"API error: {r.json().get('detail', r.text)}")
@@ -216,7 +236,9 @@ with st.sidebar:
 
     health = api_health()
     if health:
-        st.markdown('<div class="badge-green">● API Online</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="badge-green">● API Online</div>', unsafe_allow_html=True
+        )
     else:
         st.markdown(
             '<div class="badge-red">● API Offline — start your FastAPI server</div>',
@@ -227,7 +249,13 @@ with st.sidebar:
 
     page = st.radio(
         "Navigate",
-        ["🎯 Recommendations", "📋 User History", "⭐ Rate Prediction", "📊 Evaluate Models", "🧪 A/B Test"],
+        [
+            "🎯 Recommendations",
+            "📋 User History",
+            "⭐ Rate Prediction",
+            "📊 Evaluate Models",
+            "🧪 A/B Test",
+        ],
         label_visibility="collapsed",
     )
 
@@ -245,11 +273,16 @@ with st.sidebar:
 
 if page == "🎯 Recommendations":
     st.markdown('<div class="hero-title">RECOMMENDATIONS</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Personalised picks powered by machine learning</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-sub">Personalised picks powered by machine learning</div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
     with col1:
-        user_idx = st.number_input("User Index", min_value=0, max_value=29473, value=42, step=1)
+        user_idx = st.number_input(
+            "User Index", min_value=0, max_value=29473, value=42, step=1
+        )
     with col2:
         trained_models = [m["name"] for m in models_info if m["trained"]] or ["svd"]
         model = st.selectbox("Model", trained_models, index=0)
@@ -272,12 +305,13 @@ if page == "🎯 Recommendations":
                 f'<div style="margin-bottom:1rem">'
                 f'<span class="metric-pill">Model <span>{model.upper()}</span></span>'
                 f'<span class="metric-pill">Exclude Seen <span>{"Yes" if exclude_seen else "No"}</span></span>'
-                f'</div>',
+                f"</div>",
                 unsafe_allow_html=True,
             )
 
             for i, movie in enumerate(recs, 1):
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div class="movie-card">
                     <div class="movie-rank">{i:02d}</div>
                     <div style="flex:1">
@@ -286,7 +320,9 @@ if page == "🎯 Recommendations":
                         <div class="movie-idx">movie_idx: {movie['movie_idx']}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
             df = pd.DataFrame(recs)
             st.download_button(
@@ -299,11 +335,16 @@ if page == "🎯 Recommendations":
 
 elif page == "📋 User History":
     st.markdown('<div class="hero-title">USER HISTORY</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Movies rated by a user in the training set</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-sub">Movies rated by a user in the training set</div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        user_idx = st.number_input("User Index", min_value=0, max_value=29473, value=42, step=1)
+        user_idx = st.number_input(
+            "User Index", min_value=0, max_value=29473, value=42, step=1
+        )
     with col2:
         limit = st.selectbox("Show", [10, 20, 50, 100], index=1)
 
@@ -319,7 +360,8 @@ elif page == "📋 User History":
 
             for row in history["history"]:
                 rating = row.get("rating", 0)
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div class="hist-row">
                     <div>
                         <div style="font-weight:500;color:#f0f0f0">{row['title']}</div>
@@ -330,7 +372,9 @@ elif page == "📋 User History":
                         <div style="font-size:0.7rem;color:#444;margin-top:2px">idx {row['movie_idx']}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
             df = pd.DataFrame(history["history"])
             if not df.empty:
@@ -341,19 +385,32 @@ elif page == "📋 User History":
                 col2.metric("Avg Rating", f"{avg:.2f} ★")
                 col3.metric(
                     "Genres",
-                    df["genres"].str.split("|").explode().nunique() if "genres" in df else "—",
+                    (
+                        df["genres"].str.split("|").explode().nunique()
+                        if "genres" in df
+                        else "—"
+                    ),
                 )
 
 
 elif page == "⭐ Rate Prediction":
-    st.markdown('<div class="hero-title">RATING PREDICTION</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Predict what rating a user would give a specific movie</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-title">RATING PREDICTION</div>', unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="hero-sub">Predict what rating a user would give a specific movie</div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        user_idx = st.number_input("User Index", min_value=0, max_value=29473, value=42, step=1)
+        user_idx = st.number_input(
+            "User Index", min_value=0, max_value=29473, value=42, step=1
+        )
     with col2:
-        movie_idx = st.number_input("Movie Index", min_value=0, max_value=7641, value=150, step=1)
+        movie_idx = st.number_input(
+            "Movie Index", min_value=0, max_value=7641, value=150, step=1
+        )
     with col3:
         trained_models = [m["name"] for m in models_info if m["trained"]] or ["svd"]
         model = st.selectbox("Model", trained_models)
@@ -372,7 +429,8 @@ elif page == "⭐ Rate Prediction":
 
             pct = predicted / 5.0
             bar_color = "#e50914" if pct < 0.5 else "#2ecc71"
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="margin-top:1.5rem">
                 <div style="font-size:0.8rem;color:#666;margin-bottom:0.4rem;
                             text-transform:uppercase;letter-spacing:1px">Confidence bar</div>
@@ -383,28 +441,40 @@ elif page == "⭐ Rate Prediction":
                 <div style="display:flex;justify-content:space-between;font-size:0.7rem;
                             color:#444;margin-top:4px"><span>0</span><span>5</span></div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             if predicted >= 4.0:
-                interpretation = "🎯 Strong match — this user is likely to enjoy this movie."
+                interpretation = (
+                    "🎯 Strong match — this user is likely to enjoy this movie."
+                )
             elif predicted >= 3.0:
                 interpretation = "👍 Decent match — user may enjoy it."
             else:
                 interpretation = "⚠️ Weak match — user is unlikely to rate this highly."
 
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="margin-top:1.5rem;background:#18181c;border:1px solid #2a2a30;
                         border-radius:10px;padding:1rem">
                 <div style="font-size:0.75rem;color:#666;text-transform:uppercase;letter-spacing:1px">
                     Interpretation</div>
                 <div style="margin-top:0.5rem;color:#ccc">{interpretation}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
 
 elif page == "📊 Evaluate Models":
-    st.markdown('<div class="hero-title">MODEL EVALUATION</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Live ranking metrics on the held-out test split</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-title">MODEL EVALUATION</div>', unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="hero-sub">Live ranking metrics on the held-out test split</div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -415,7 +485,10 @@ elif page == "📊 Evaluate Models":
     with col3:
         top_k = st.slider("Top K", 5, 50, 10, step=5)
 
-    st.info("⏱ Evaluation may take 10–60 seconds depending on the model and number of users.", icon="ℹ️")
+    st.info(
+        "⏱ Evaluation may take 10–60 seconds depending on the model and number of users.",
+        icon="ℹ️",
+    )
 
     if st.button("📊 Run Evaluation", use_container_width=True, type="primary"):
         with st.spinner(f"Evaluating {model.upper()} on {n_users} users..."):
@@ -431,11 +504,11 @@ elif page == "📊 Evaluate Models":
             cols = st.columns(3)
             metric_map = {
                 "Precision@K": ("Precision", "Fraction of top-K that are relevant"),
-                "Recall@K":    ("Recall",    "Relevant items found in top-K"),
-                "NDCG@K":      ("NDCG",      "Normalised Discounted Cumulative Gain"),
-                "MAP":         ("MAP",       "Mean Average Precision"),
-                "MRR":         ("MRR",       "Mean Reciprocal Rank"),
-                "HitRate@K":   ("HitRate",   "Any relevant item in top-K"),
+                "Recall@K": ("Recall", "Relevant items found in top-K"),
+                "NDCG@K": ("NDCG", "Normalised Discounted Cumulative Gain"),
+                "MAP": ("MAP", "Mean Average Precision"),
+                "MRR": ("MRR", "Mean Reciprocal Rank"),
+                "HitRate@K": ("HitRate", "Any relevant item in top-K"),
             }
             for i, (key, (label, help_txt)) in enumerate(metric_map.items()):
                 if key in metrics:
@@ -462,13 +535,21 @@ elif page == "📊 Evaluate Models":
 
 elif page == "🧪 A/B Test":
     st.markdown('<div class="hero-title">A/B TEST</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-sub">Compare two models side by side for the same user</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-sub">Compare two models side by side for the same user</div>',
+        unsafe_allow_html=True,
+    )
 
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
     with col1:
-        user_idx = st.number_input("User Index", min_value=0, max_value=29473, value=42, step=1)
+        user_idx = st.number_input(
+            "User Index", min_value=0, max_value=29473, value=42, step=1
+        )
     with col2:
-        trained_models = [m["name"] for m in models_info if m["trained"]] or ["svd", "cf"]
+        trained_models = [m["name"] for m in models_info if m["trained"]] or [
+            "svd",
+            "cf",
+        ]
         model_a = st.selectbox("Model A", trained_models, index=0)
     with col3:
         model_b_opts = [m for m in trained_models if m != model_a]
@@ -488,7 +569,9 @@ elif page == "🧪 A/B Test":
 
             st.divider()
             c1, c2, c3 = st.columns(3)
-            c1.metric("Overlap", f"{overlap_pct:.0f}%", help="% of top-K both models agree on")
+            c1.metric(
+                "Overlap", f"{overlap_pct:.0f}%", help="% of top-K both models agree on"
+            )
             c2.metric(f"Unique to {model_a.upper()}", len(result["unique_to_a"]))
             c3.metric(f"Unique to {model_b.upper()}", len(result["unique_to_b"]))
 
@@ -502,7 +585,8 @@ elif page == "🧪 A/B Test":
                 overlap_color = "#e50914"
                 diversity_msg = "🔴 High overlap — models recommend very similar items."
 
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="background:#18181c;border:1px solid #2a2a30;border-radius:10px;
                         padding:1rem;margin:1rem 0">
                 <div style="font-size:0.75rem;color:#666;text-transform:uppercase;
@@ -513,18 +597,26 @@ elif page == "🧪 A/B Test":
                 </div>
                 <div style="font-size:0.8rem;color:#aaa;margin-top:0.5rem">{diversity_msg}</div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             st.divider()
             col_a, col_b = st.columns(2)
 
             with col_a:
-                st.markdown(f'<div class="section-header">{model_a.upper()}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-header">{model_a.upper()}</div>',
+                    unsafe_allow_html=True,
+                )
                 for i, movie in enumerate(result["results_a"], 1):
-                    is_overlap = any(m["movie_idx"] == movie["movie_idx"] for m in result["overlap"])
+                    is_overlap = any(
+                        m["movie_idx"] == movie["movie_idx"] for m in result["overlap"]
+                    )
                     border = "border-color: #2ecc71;" if is_overlap else ""
                     checkmark = " ✓" if is_overlap else ""
-                    st.markdown(f"""
+                    st.markdown(
+                        f"""
                     <div class="movie-card" style="{border}">
                         <div class="movie-rank">{i:02d}</div>
                         <div style="flex:1">
@@ -532,15 +624,23 @@ elif page == "🧪 A/B Test":
                             <div style="margin-top:4px">{genre_tags(movie['genres'])}</div>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """,
+                        unsafe_allow_html=True,
+                    )
 
             with col_b:
-                st.markdown(f'<div class="section-header">{model_b.upper()}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-header">{model_b.upper()}</div>',
+                    unsafe_allow_html=True,
+                )
                 for i, movie in enumerate(result["results_b"], 1):
-                    is_overlap = any(m["movie_idx"] == movie["movie_idx"] for m in result["overlap"])
+                    is_overlap = any(
+                        m["movie_idx"] == movie["movie_idx"] for m in result["overlap"]
+                    )
                     border = "border-color: #2ecc71;" if is_overlap else ""
                     checkmark = " ✓" if is_overlap else ""
-                    st.markdown(f"""
+                    st.markdown(
+                        f"""
                     <div class="movie-card" style="{border}">
                         <div class="movie-rank">{i:02d}</div>
                         <div style="flex:1">
@@ -548,6 +648,8 @@ elif page == "🧪 A/B Test":
                             <div style="margin-top:4px">{genre_tags(movie['genres'])}</div>
                         </div>
                     </div>
-                    """, unsafe_allow_html=True)
+                    """,
+                        unsafe_allow_html=True,
+                    )
 
             st.caption("✓ = movie recommended by both models")

@@ -16,12 +16,7 @@ try:
 except ImportError:  # pragma: no cover
     torch = None  # type: ignore[assignment]
 
-from config import (
-    FAISS_INDEX_PATH,
-    MODELS_DIR,
-    N_CANDIDATES,
-    SPLITS_DIR,
-)
+from config import FAISS_INDEX_PATH, MODELS_DIR, N_CANDIDATES, SPLITS_DIR
 
 # ── Base interface ────────────────────────────────────────────────────────────
 
@@ -29,7 +24,9 @@ from config import (
 class BaseRecommender:
     """Every recommender must implement recommend()."""
 
-    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
+    def recommend(
+        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
+    ) -> list[int]:
         raise NotImplementedError
 
     def recommend_batch(
@@ -40,7 +37,10 @@ class BaseRecommender:
         seen_dict: dict[int, list[int]] | None = None,
     ) -> dict[int, list[int]]:
         seen_dict = seen_dict or {}
-        return {u: self.recommend(u, top_k=top_k, exclude_seen=exclude_seen) for u in user_idxs}
+        return {
+            u: self.recommend(u, top_k=top_k, exclude_seen=exclude_seen)
+            for u in user_idxs
+        }
 
 
 # ── CF recommender ────────────────────────────────────────────────────────────
@@ -55,7 +55,9 @@ class CFRecommender(BaseRecommender):
             self._model = pickle.load(f)
         print(f"CFRecommender loaded from {path}")
 
-    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
+    def recommend(
+        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
+    ) -> list[int]:
         return self._model.recommend(user_idx, top_k=top_k, exclude_seen=exclude_seen)
 
 
@@ -77,7 +79,9 @@ class SVDRecommender(BaseRecommender):
             self._seen = {}
         print(f"SVDRecommender loaded from {path}")
 
-    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
+    def recommend(
+        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
+    ) -> list[int]:
         seen = self._seen.get(user_idx, []) if exclude_seen else []
         return self._model.recommend(user_idx, top_k=top_k, seen_movie_idxs=seen)
 
@@ -91,7 +95,9 @@ class TwoTowerRecommender(BaseRecommender):
     If the FAISS index doesn't exist yet, it builds it from item vectors.
     """
 
-    def __init__(self, model_path: Path = None, train_df: pd.DataFrame = None, device: str = None):
+    def __init__(
+        self, model_path: Path = None, train_df: pd.DataFrame = None, device: str = None
+    ):
         try:
             import faiss
 
@@ -168,7 +174,9 @@ class TwoTowerRecommender(BaseRecommender):
 
     def _get_user_vector(self, user_idx: int) -> np.ndarray:
         if user_idx not in self._user_feat_idx:
-            raise ValueError(f"User {user_idx} was not seen during training (cold-start).")
+            raise ValueError(
+                f"User {user_idx} was not seen during training (cold-start)."
+            )
         uf_i = self._user_feat_idx[user_idx]
         u_feat = self._user_feat_mat[uf_i].unsqueeze(0)
         u_idx_t = torch.tensor([user_idx])
@@ -187,7 +195,9 @@ class TwoTowerRecommender(BaseRecommender):
 
     # ── Recommend ─────────────────────────────────────────────────────────────
 
-    def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
+    def recommend(
+        self, user_idx: int, top_k: int = 10, exclude_seen: bool = True
+    ) -> list[int]:
         u_vec = self._get_user_vector(user_idx)
         _, indices = self._index.search(u_vec, N_CANDIDATES)
         candidates = indices[0].tolist()
@@ -222,7 +232,9 @@ def load_recommender(
     elif model_name in ("two_tower", "twotower"):
         return TwoTowerRecommender(train_df=train_df)
     else:
-        raise ValueError(f"Unknown model: {model_name!r}. Choose from 'cf', 'svd', 'two_tower'.")
+        raise ValueError(
+            f"Unknown model: {model_name!r}. Choose from 'cf', 'svd', 'two_tower'."
+        )
 
 
 # ── Quick smoke-test ──────────────────────────────────────────────────────────
