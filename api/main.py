@@ -349,7 +349,7 @@ def evaluate_model(
     recs_dict = rec.recommend_batch(user_ids, top_k=top_k)
 
     # Optional beyond-accuracy metrics
-    n_items = int(_test_df["movie_idx"].max()) + 1 if _test_df is not None else None
+    n_items = int(_movie_meta.index.max()) + 1 if _movie_meta is not None else None
 
     results_df = evaluate_recommendations(
         recs_dict,
