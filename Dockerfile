@@ -30,7 +30,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --chown=appuser:appuser . .
 RUN mkdir -p /app/models/saved \
-    && chown -R appuser:appuser /app/models
+    && mkdir -p /app/data/splits \
+    && mkdir -p /app/data/processed \
+    && chown -R appuser:appuser /app/models \
+    && chown -R appuser:appuser /app/data
 
 USER appuser
 
