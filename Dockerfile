@@ -37,13 +37,13 @@ RUN mkdir -p /app/models/saved \
 
 USER appuser
 
-ENV PORT=8000
+ENV PORT=7860
 ENV ENV=production
 ENV WEB_CONCURRENCY=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-EXPOSE 8000
+EXPOSE 7860
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
