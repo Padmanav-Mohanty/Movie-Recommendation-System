@@ -3,7 +3,9 @@ services:
     name: movie-recommender-api
     env: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: starter
+    startCommand: >
+      uvicorn api.main:app --host 0.0.0.0 --port $PORT --workers $WEB_CONCURRENCY --log-level info
     envVars:
       - key: PORT
         value: 8000
@@ -11,7 +13,14 @@ services:
         value: production
       - key: DEFAULT_MODEL
         value: svd
+      - key: WEB_CONCURRENCY
+        value: 1
       - key: ALLOWED_ORIGINS
         value: "*"
-    healthCheckPath: /health
+      # Optional: set to an HTTPS/S3 presigned base URL that contains svd_model.pkl, etc.
+      - key: MODEL_ARTIFACT_BASE_URL
+        sync: false
+      - key: MODEL_ARTIFACTS
+        value: svd_model.pkl
+    healthCheckPath: /health/live
     autoDeploy: true

@@ -44,3 +44,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Runtime model artifacts are downloaded or mounted, not baked into the image.
+models/saved/
