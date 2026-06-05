@@ -381,7 +381,8 @@ def recommend(req: RecommendRequest):
         inner = getattr(rec, "_model", None)
         if inner and hasattr(inner, "predict"):
             try:
-                score = round(float(inner.predict(req.user_idx, idx)), 3)
+                pred = inner.predict(req.user_idx, idx)
+                score = round(float(pred.est if hasattr(pred, "est") else pred), 3)
             except Exception:
                 score = 0.0
         items.append(MovieResult(**movie.model_dump(), score=score))
