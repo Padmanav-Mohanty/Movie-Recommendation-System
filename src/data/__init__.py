@@ -13,7 +13,13 @@ def load_raw(*args, **kwargs):
     return _load_raw(*args, **kwargs)
 
 
-from .preprocess import basic_clean, encode_ids, parse_genres, run_pipeline, split_data  # noqa: E402
+from .preprocess import (  # noqa: E402
+    basic_clean,
+    encode_ids,
+    parse_genres,
+    run_pipeline,
+    split_data,
+)
 
 __all__ = [
     "get_data",
