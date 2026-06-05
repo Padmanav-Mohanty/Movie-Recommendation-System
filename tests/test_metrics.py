@@ -9,15 +9,23 @@ import pandas as pd
 import pytest
 
 from src.evaluation.metrics import (
-    rmse, mae,
-    precision_at_k, recall_at_k, hit_rate_at_k, ndcg_at_k,
-    average_precision, mean_average_precision, mrr,
-    catalogue_coverage_at_k, novelty_at_k,
-    build_ground_truth, evaluate_recommendations,
+    average_precision,
+    build_ground_truth,
+    catalogue_coverage_at_k,
+    evaluate_recommendations,
+    hit_rate_at_k,
+    mae,
+    mean_average_precision,
+    mrr,
+    ndcg_at_k,
+    novelty_at_k,
+    precision_at_k,
+    recall_at_k,
+    rmse,
 )
 
-
 # ── Rating-prediction metrics ─────────────────────────────────────────────────
+
 
 class TestRatingPrediction:
     def test_rmse_perfect(self):
@@ -52,8 +60,9 @@ class TestRatingPrediction:
 
 # ── Per-user ranking metrics ──────────────────────────────────────────────────
 
+
 class TestPrecisionRecall:
-    REC      = [1, 2, 3, 4, 5]
+    REC = [1, 2, 3, 4, 5]
     RELEVANT = [2, 4, 6]
 
     def test_precision_at_k_basic(self):
@@ -101,7 +110,7 @@ class TestNDCG:
         # Relevant item first → higher NDCG than relevant item last
         relevant = [1]
         ndcg_first = ndcg_at_k([1, 2, 3, 4], relevant, k=4)
-        ndcg_last  = ndcg_at_k([2, 3, 4, 1], relevant, k=4)
+        ndcg_last = ndcg_at_k([2, 3, 4, 1], relevant, k=4)
         assert ndcg_first > ndcg_last
 
     def test_ndcg_empty_relevant(self):
@@ -116,6 +125,7 @@ class TestNDCG:
 
 
 # ── Aggregate metrics ─────────────────────────────────────────────────────────
+
 
 class TestAveragePrecision:
     def test_perfect(self):
@@ -138,33 +148,34 @@ class TestAveragePrecision:
 class TestMAP:
     def test_perfect(self):
         recs = {0: [1, 2], 1: [3, 4]}
-        gt   = {0: [1, 2], 1: [3, 4]}
+        gt = {0: [1, 2], 1: [3, 4]}
         assert mean_average_precision(recs, gt) == pytest.approx(1.0)
 
     def test_zero(self):
         recs = {0: [5, 6], 1: [7, 8]}
-        gt   = {0: [1, 2], 1: [3, 4]}
+        gt = {0: [1, 2], 1: [3, 4]}
         assert mean_average_precision(recs, gt) == pytest.approx(0.0)
 
 
 class TestMRR:
     def test_first_hit_at_rank_1(self):
         recs = {0: [1, 2, 3]}
-        gt   = {0: [1]}
+        gt = {0: [1]}
         assert mrr(recs, gt) == pytest.approx(1.0)
 
     def test_first_hit_at_rank_2(self):
         recs = {0: [9, 1, 2, 3]}
-        gt   = {0: [1]}
+        gt = {0: [1]}
         assert mrr(recs, gt) == pytest.approx(0.5)
 
     def test_no_hit(self):
         recs = {0: [9, 8, 7]}
-        gt   = {0: [1, 2]}
+        gt = {0: [1, 2]}
         assert mrr(recs, gt) == pytest.approx(0.0)
 
 
 # ── Beyond-accuracy metrics ───────────────────────────────────────────────────
+
 
 class TestCoverage:
     def test_full_coverage(self):
@@ -189,37 +200,38 @@ class TestNovelty:
 
     def test_novelty_decreases_with_popularity(self):
         # Lower popularity → higher novelty
-        pop_niche     = {0: 1}
-        pop_popular   = {0: 100}
+        pop_niche = {0: 1}
+        pop_popular = {0: 100}
         recs = {0: [0]}
-        n = novelty_at_k(recs, pop_niche,   n_users=1000, k=1)
+        n = novelty_at_k(recs, pop_niche, n_users=1000, k=1)
         p = novelty_at_k(recs, pop_popular, n_users=1000, k=1)
         assert n > p
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 class TestBuildGroundTruth:
     def test_filters_by_min_rating(self):
-        df = pd.DataFrame({
-            "user_idx":  [0, 0, 1, 1],
-            "movie_idx": [0, 1, 2, 3],
-            "rating":    [5.0, 2.0, 4.0, 1.0],
-        })
+        df = pd.DataFrame(
+            {
+                "user_idx": [0, 0, 1, 1],
+                "movie_idx": [0, 1, 2, 3],
+                "rating": [5.0, 2.0, 4.0, 1.0],
+            }
+        )
         gt = build_ground_truth(df, min_rating=4.0)
         assert gt == {0: [0], 1: [2]}
 
     def test_empty_if_no_high_ratings(self):
-        df = pd.DataFrame({
-            "user_idx":  [0], "movie_idx": [0], "rating": [1.0]
-        })
+        df = pd.DataFrame({"user_idx": [0], "movie_idx": [0], "rating": [1.0]})
         gt = build_ground_truth(df, min_rating=4.0)
         assert gt == {}
 
 
 class TestEvaluateRecommendations:
     RECS = {0: [1, 2, 3, 4, 5], 1: [6, 7, 8, 9, 10]}
-    GT   = {0: [2, 4], 1: [6, 10]}
+    GT = {0: [2, 4], 1: [6, 10]}
 
     def test_returns_dataframe(self):
         df = evaluate_recommendations(self.RECS, self.GT, k_values=[5])

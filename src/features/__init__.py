@@ -1,7 +1,7 @@
 from .build_features import (
-    build_user_features,
-    build_item_features,
     build_interaction_matrix,
+    build_item_features,
+    build_user_features,
     run_feature_pipeline,
 )
 

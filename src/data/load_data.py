@@ -1,5 +1,6 @@
 import pandas as pd
 from datasets import load_dataset
+
 from config import HF_DATASET_PATH, RAW_DIR
 
 
@@ -10,7 +11,7 @@ def load_from_huggingface() -> tuple[pd.DataFrame, pd.DataFrame]:
     dataset = load_dataset(HF_DATASET_PATH)
 
     train_df = dataset["train"].to_pandas()
-    val_df   = dataset["validation"].to_pandas()
+    val_df = dataset["validation"].to_pandas()
 
     print(f"  Train:      {len(train_df):,} rows")
     print(f"  Validation: {len(val_df):,} rows")
@@ -22,14 +23,14 @@ def save_raw(train_df: pd.DataFrame, val_df: pd.DataFrame) -> None:
     """Save raw splits to disk."""
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     train_df.to_parquet(RAW_DIR / "train.parquet", index=False)
-    val_df.to_parquet(RAW_DIR   / "validation.parquet", index=False)
+    val_df.to_parquet(RAW_DIR / "validation.parquet", index=False)
     print(f"Saved raw data to {RAW_DIR}")
 
 
 def load_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load from local disk (faster than re-downloading)."""
     train_path = RAW_DIR / "train.parquet"
-    val_path   = RAW_DIR / "validation.parquet"
+    val_path = RAW_DIR / "validation.parquet"
 
     if not train_path.exists():
         raise FileNotFoundError("Raw data not found. Run with force_download=True first.")
