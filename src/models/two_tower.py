@@ -22,7 +22,9 @@ from config import (
 
 
 class RatingsDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, user_features: pd.DataFrame, item_features: pd.DataFrame):
+    def __init__(
+        self, df: pd.DataFrame, user_features: pd.DataFrame, item_features: pd.DataFrame
+    ):
         self.users = torch.tensor(df["user_idx"].values, dtype=torch.long)
         self.movies = torch.tensor(df["movie_idx"].values, dtype=torch.long)
         self.ratings = torch.tensor(df["rating"].values, dtype=torch.float32)
@@ -109,7 +111,9 @@ class TwoTowerModel(nn.Module):
 
         self._init_weights()
 
-    def _build_tower(self, input_dim: int, hidden_dims: list, dropout: float) -> nn.Sequential:
+    def _build_tower(
+        self, input_dim: int, hidden_dims: list, dropout: float
+    ) -> nn.Sequential:
         layers = []
         in_dim = input_dim
         for h in hidden_dims:
@@ -139,11 +143,15 @@ class TwoTowerModel(nn.Module):
         score = torch.sigmoid(score) * 4.5 + 0.5
         return score
 
-    def get_user_vector(self, user_idx: torch.Tensor, user_feat: torch.Tensor) -> torch.Tensor:
+    def get_user_vector(
+        self, user_idx: torch.Tensor, user_feat: torch.Tensor
+    ) -> torch.Tensor:
         u_emb = self.user_embedding(user_idx)
         return self.user_tower(torch.cat([u_emb, user_feat], dim=1))
 
-    def get_item_vector(self, movie_idx: torch.Tensor, item_feat: torch.Tensor) -> torch.Tensor:
+    def get_item_vector(
+        self, movie_idx: torch.Tensor, item_feat: torch.Tensor
+    ) -> torch.Tensor:
         m_emb = self.movie_embedding(movie_idx)
         return self.item_tower(torch.cat([m_emb, item_feat], dim=1))
 
@@ -152,7 +160,9 @@ class TwoTowerModel(nn.Module):
 
 
 class Trainer:
-    def __init__(self, model: TwoTowerModel, lr: float = LEARNING_RATE, device: str = None):
+    def __init__(
+        self, model: TwoTowerModel, lr: float = LEARNING_RATE, device: str = None
+    ):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
@@ -200,7 +210,10 @@ class Trainer:
         return rmse, mae
 
     def fit(
-        self, train_loader: DataLoader, val_loader: DataLoader, n_epochs: int = NUM_EPOCHS
+        self,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        n_epochs: int = NUM_EPOCHS,
     ) -> list[dict]:
         history = []
         best_rmse = float("inf")
@@ -214,7 +227,12 @@ class Trainer:
             elapsed = time.time() - t0
 
             history.append(
-                {"epoch": epoch, "train_loss": train_loss, "val_rmse": val_rmse, "val_mae": val_mae}
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "val_rmse": val_rmse,
+                    "val_mae": val_mae,
+                }
             )
 
             print(
@@ -227,7 +245,9 @@ class Trainer:
 
             if val_rmse < best_rmse:
                 best_rmse = val_rmse
-                best_state = {k: v.cpu().clone() for k, v in self.model.state_dict().items()}
+                best_state = {
+                    k: v.cpu().clone() for k, v in self.model.state_dict().items()
+                }
 
         # Restore best weights
         self.model.load_state_dict(best_state)
@@ -262,7 +282,11 @@ if __name__ == "__main__":
         train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=False
     )
     val_loader = DataLoader(
-        val_ds, batch_size=BATCH_SIZE * 2, shuffle=False, num_workers=0, pin_memory=False
+        val_ds,
+        batch_size=BATCH_SIZE * 2,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=False,
     )
 
     n_users = train["user_idx"].max() + 1

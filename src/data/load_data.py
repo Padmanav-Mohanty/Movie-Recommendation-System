@@ -33,7 +33,9 @@ def load_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     val_path = RAW_DIR / "validation.parquet"
 
     if not train_path.exists():
-        raise FileNotFoundError("Raw data not found. Run with force_download=True first.")
+        raise FileNotFoundError(
+            "Raw data not found. Run with force_download=True first."
+        )
 
     return pd.read_parquet(train_path), pd.read_parquet(val_path)
 
