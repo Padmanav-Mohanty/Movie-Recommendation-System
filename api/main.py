@@ -292,6 +292,7 @@ class MovieResult(BaseModel):
     movie_idx: int
     title: str
     genres: str
+    score: float = 0.0
 
 
 class RecommendResponse(BaseModel):
@@ -367,15 +368,24 @@ def list_models():
     }
 
 
-@app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
+@app.post("/recommendations", response_model=RecommendResponse)
 def recommend(req: RecommendRequest):
-    """Return top-K movie recommendations for a user."""
-    rec = get_recommender(req.model)
-    try:
-        recs = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    items = [enrich_movie(idx) for idx in recs]
+    rec   = get_recommender(req.model)
+    recs  = rec.recommend(req.user_idx, top_k=req.top_k, exclude_seen=req.exclude_seen)
+    
+    items = []
+    for idx in recs:
+        movie = enrich_movie(idx)
+        # Get predicted score if model supports it
+        score = 0.0
+        inner = getattr(rec, "_model", None)
+        if inner and hasattr(inner, "predict"):
+            try:
+                score = round(float(inner.predict(req.user_idx, idx)), 3)
+            except Exception:
+                score = 0.0
+        items.append(MovieResult(**movie.model_dump(), score=score))
+    
     return RecommendResponse(
         user_idx=req.user_idx,
         model=req.model,
