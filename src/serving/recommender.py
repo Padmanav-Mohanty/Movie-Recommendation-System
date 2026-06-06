@@ -42,6 +42,7 @@ def _safe_pickle_load(path):
     with open(path, "rb") as f:
         return _CompatUnpickler(f).load()
 
+
 # ── Base interface ────────────────────────────────────────────────────────────
 
 
