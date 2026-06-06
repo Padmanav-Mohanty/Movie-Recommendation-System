@@ -193,6 +193,27 @@ class TwoTowerRecommender(BaseRecommender):
 
         return candidates[:top_k]
 
+    # ── Predict ──────────────────────────────────────────────────────────────
+
+    def predict(self, user_idx: int, movie_idx: int) -> float:
+        """Predict the rating a user would give a movie using the Two-Tower model."""
+        if user_idx not in self._user_feat_idx:
+            raise ValueError(f"User {user_idx} not seen during training (cold-start).")
+        if movie_idx not in self._item_feat_idx:
+            raise ValueError(f"Movie {movie_idx} not seen during training.")
+
+        uf_i = self._user_feat_idx[user_idx]
+        if_i = self._item_feat_idx[movie_idx]
+
+        u_feat = self._user_feat_mat[uf_i].unsqueeze(0).to(self.device)
+        i_feat = self._item_feat_mat[if_i].unsqueeze(0).to(self.device)
+        u_idx_t = torch.tensor([user_idx]).to(self.device)
+        m_idx_t = torch.tensor([movie_idx]).to(self.device)
+
+        with torch.no_grad():
+            score = self._model(u_idx_t, m_idx_t, u_feat, i_feat)
+
+        return round(float(score.item()), 3)
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 
