@@ -376,7 +376,9 @@ def recommend(req: RecommendRequest):
     for idx in recs:
         movie = enrich_movie(idx)
         score = _score_for(rec, req.user_idx, idx)
-        items.append(MovieResult(**movie.model_dump(), score=score))
+        movie_data = movie.model_dump()
+        movie_data["score"] = score
+        items.append(MovieResult(**movie_data))
 
     return RecommendResponse(
         user_idx=req.user_idx,
