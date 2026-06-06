@@ -25,9 +25,6 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin
-from urllib.request import urlretrieve
 
 import pandas as pd
 import uvicorn
