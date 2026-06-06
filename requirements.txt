@@ -4,7 +4,7 @@
 datasets>=4.8.5
 faiss-cpu>=1.14.2
 fastapi>=0.136.3
-gradio>=4.44.0
+gradio>=5.0.0
 huggingface-hub>=0.23.0
 numpy>=2.4.6
 pandas>=2.3.3
