@@ -480,7 +480,7 @@ class ABTestRequest(BaseModel):
                 "user_idx": 42,
                 "top_k": 10,
                 "model_a": "svd",
-                "model_b": "cf",
+                "model_b": "two_tower",
                 "exclude_seen": True,
             }
         }
