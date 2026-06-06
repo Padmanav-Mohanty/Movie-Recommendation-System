@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover
     torch = None  # type: ignore[assignment]
 
 from config import FAISS_INDEX_PATH, MODELS_DIR, N_CANDIDATES, SPLITS_DIR
+from src.models.matrix_factorization import MatrixFactorization  # noqa: F401 — required for pickle
 
 # ── Base interface ────────────────────────────────────────────────────────────
 
