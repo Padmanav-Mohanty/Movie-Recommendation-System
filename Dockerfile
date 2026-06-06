@@ -22,7 +22,9 @@ USER appuser
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV API_BASE_URL=http://localhost:8000
 
 EXPOSE 7860
 
-CMD ["python", "app.py"]
+# Start FastAPI in background on port 8000, then launch Gradio on 7860
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 1 &\n sleep 5 &&\n python app.py"]
