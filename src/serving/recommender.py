@@ -19,6 +19,29 @@ except ImportError:  # pragma: no cover
 from config import FAISS_INDEX_PATH, MODELS_DIR, N_CANDIDATES, SPLITS_DIR
 from src.models.matrix_factorization import MatrixFactorization  # noqa: F401 — required for pickle
 
+
+# ── Pickle compatibility patch ────────────────────────────────────────────────
+# If the model was pickled when matrix_factorization.py ran as __main__, or
+# under a different module path, unpickling fails with "Can't get attribute".
+# This custom Unpickler remaps any known alias back to the real class.
+class _CompatUnpickler(pickle.Unpickler):
+    _CLASS_MAP = {
+        ("__main__", "MatrixFactorization"): MatrixFactorization,
+        ("matrix_factorization", "MatrixFactorization"): MatrixFactorization,
+        ("models.matrix_factorization", "MatrixFactorization"): MatrixFactorization,
+    }
+
+    def find_class(self, module, name):
+        cls = self._CLASS_MAP.get((module, name))
+        if cls is not None:
+            return cls
+        return super().find_class(module, name)
+
+
+def _safe_pickle_load(path):
+    with open(path, "rb") as f:
+        return _CompatUnpickler(f).load()
+
 # ── Base interface ────────────────────────────────────────────────────────────
 
 
@@ -47,8 +70,7 @@ class CFRecommender(BaseRecommender):
 
     def __init__(self, model_path: Path = None):
         path = model_path or (MODELS_DIR / "user_based_cf.pkl")
-        with open(path, "rb") as f:
-            self._model = pickle.load(f)
+        self._model = _safe_pickle_load(path)
         print(f"CFRecommender loaded from {path}")
 
     def recommend(self, user_idx: int, top_k: int = 10, exclude_seen: bool = True) -> list[int]:
@@ -63,8 +85,7 @@ class SVDRecommender(BaseRecommender):
 
     def __init__(self, model_path: Path = None, train_df: pd.DataFrame = None):
         path = model_path or (MODELS_DIR / "svd_model.pkl")
-        with open(path, "rb") as f:
-            self._model = pickle.load(f)
+        self._model = _safe_pickle_load(path)
 
         # Build seen-items lookup from train
         if train_df is not None:
