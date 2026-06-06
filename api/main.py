@@ -36,11 +36,12 @@ from pydantic import BaseModel, Field
 # ── Make src/ importable when running from repo root ─────────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import MODELS_DIR, SPLITS_DIR, PROCESSED_DIR
+from config import MODELS_DIR, PROCESSED_DIR, SPLITS_DIR
 from src.evaluation.metrics import build_ground_truth, evaluate_recommendations
 from src.serving.recommender import BaseRecommender, load_recommender
 
 # ── Model artifact download ────────────────────────────────────────────────────
+
 
 def _download_model_artifacts() -> None:
     """
@@ -66,8 +67,11 @@ def _download_model_artifacts() -> None:
     # Map filenames to their target directories
     splits_files = {"train.parquet", "test.parquet", "val.parquet"}
     processed_files = {
-        "interaction_matrix.npz", "item_features.parquet",
-        "movie2idx.parquet", "user2idx.parquet", "user_features.parquet"
+        "interaction_matrix.npz",
+        "item_features.parquet",
+        "movie2idx.parquet",
+        "user2idx.parquet",
+        "user_features.parquet",
     }
 
     for filename in [f.strip() for f in artifacts.split(",") if f.strip()]:
@@ -89,6 +93,8 @@ def _download_model_artifacts() -> None:
         except Exception as exc:
             log.error("Failed to download %s: %s", filename, exc)
             raise RuntimeError(f"Could not fetch required model artifact: {filename}") from exc
+
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -116,7 +122,6 @@ MODEL_ARTIFACT_FILENAMES = {
 _startup_started_at = time.time()
 _startup_complete = False
 _startup_error: str | None = None
-
 
 
 # ── Lifespan (replaces deprecated @app.on_event) ─────────────────────────────
@@ -342,9 +347,17 @@ def list_models():
         ]
     }
 
+
 @app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
 def _score_for(rec: BaseRecommender, user_idx: int, movie_idx: int) -> float:
-    """Try to get a predicted score; return 0.0 on failure."""
+    # TwoTowerRecommender exposes predict() directly on itself
+    if hasattr(rec, "predict"):
+        try:
+            return round(float(rec.predict(user_idx, movie_idx)), 3)
+        except Exception as exc:
+            log.warning("Score failed for user=%s movie=%s: %s", user_idx, movie_idx, exc)
+            return 0.0
+    # SVD exposes predict() on the inner _model
     inner = getattr(rec, "_model", None)
     if inner is not None and hasattr(inner, "predict"):
         try:
@@ -352,6 +365,7 @@ def _score_for(rec: BaseRecommender, user_idx: int, movie_idx: int) -> float:
         except Exception as exc:
             log.warning("Score failed for user=%s movie=%s: %s", user_idx, movie_idx, exc)
     return 0.0
+
 
 def recommend(req: RecommendRequest):
     """Return top-K movie recommendations for a user."""
@@ -370,6 +384,7 @@ def recommend(req: RecommendRequest):
         top_k=req.top_k,
         recommendations=items,
     )
+
 
 @app.post("/ratings/predict", response_model=PredictResponse, tags=["Recommendations"])
 def predict_rating(req: PredictRequest):
