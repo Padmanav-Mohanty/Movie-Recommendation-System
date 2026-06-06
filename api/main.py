@@ -347,6 +347,7 @@ def list_models():
         ]
     }
 
+
 def _score_for(rec: BaseRecommender, user_idx: int, movie_idx: int) -> float:
     # TwoTowerRecommender exposes predict() directly on itself
     if hasattr(rec, "predict"):
@@ -363,6 +364,7 @@ def _score_for(rec: BaseRecommender, user_idx: int, movie_idx: int) -> float:
         except Exception as exc:
             log.warning("Score failed for user=%s movie=%s: %s", user_idx, movie_idx, exc)
     return 0.0
+
 
 @app.post("/recommendations", response_model=RecommendResponse, tags=["Recommendations"])
 def recommend(req: RecommendRequest):
