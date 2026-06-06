@@ -215,6 +215,7 @@ class TwoTowerRecommender(BaseRecommender):
 
         return round(float(score.item()), 3)
 
+
 # ── Factory ───────────────────────────────────────────────────────────────────
 
 
