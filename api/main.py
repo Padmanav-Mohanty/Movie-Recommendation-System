@@ -332,7 +332,6 @@ def health():
 def list_models():
     """List all models and whether their artefacts exist on disk."""
     path_map = {
-        "cf": MODELS_DIR / "user_based_cf.pkl",
         "svd": MODELS_DIR / "svd_model.pkl",
         "two_tower": MODELS_DIR / "two_tower.pt",
     }
