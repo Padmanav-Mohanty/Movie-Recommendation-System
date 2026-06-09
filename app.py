@@ -345,7 +345,7 @@ HEADER_HTML = """
 <div style="background:#0d0d0f;padding:1.5rem 2rem;border-bottom:1px solid #222;display:flex;align-items:center;justify-content:space-between">
     <div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:3px;color:#fff;line-height:1">🎬 MOVIE RECOMMENDER</div>
-        <div style="font-size:0.8rem;color:#666;text-transform:uppercase;letter-spacing:2px;margin-top:2px">Powered by SVD · CF · Two-Tower</div>
+        <div style="font-size:0.8rem;color:#666;text-transform:uppercase;letter-spacing:2px;margin-top:2px">Powered by SVD · Two-Tower</div>
     </div>
 </div>
 """
