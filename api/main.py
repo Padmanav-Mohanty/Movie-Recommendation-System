@@ -393,13 +393,19 @@ def predict_rating(req: PredictRequest):
     """Predict the rating a user would give a specific movie."""
     rec = get_recommender(req.model)
 
-    inner_model = getattr(rec, "_model", None)
-    if inner_model is None or not hasattr(inner_model, "predict"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{req.model}' does not expose a rating-prediction method.",
-        )
-    rating = float(inner_model.predict(req.user_idx, req.movie_idx))
+    # Check recommender wrapper first (e.g. TwoTowerRecommender.predict),
+    # then fall back to the inner model (e.g. SVD/CF).
+    if hasattr(rec, "predict"):
+        rating = float(rec.predict(req.user_idx, req.movie_idx))
+    else:
+        inner_model = getattr(rec, "_model", None)
+        if inner_model is None or not hasattr(inner_model, "predict"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model '{req.model}' does not expose a rating-prediction method.",
+            )
+        rating = float(inner_model.predict(req.user_idx, req.movie_idx))
+
     return PredictResponse(
         user_idx=req.user_idx,
         movie_idx=req.movie_idx,

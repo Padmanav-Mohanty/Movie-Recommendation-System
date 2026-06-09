@@ -1,5 +1,5 @@
 ﻿---
-title: Movie Recommender UI
+title: Movie Recommender
 emoji: 🎬
 colorFrom: red
 colorTo: gray

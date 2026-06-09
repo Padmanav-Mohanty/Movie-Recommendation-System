@@ -428,7 +428,7 @@ with gr.Blocks(theme=theme, title="Movie Recommender", css="""
             with gr.Row():
                 ab_user = gr.Number(label="User Index", value=42, minimum=0, maximum=29473, step=1, scale=2)
                 ab_ma   = gr.Dropdown(label="Model A", choices=trained_model_names(), value="svd", scale=2)
-                ab_mb   = gr.Dropdown(label="Model B", choices=trained_model_names(), value="cf", scale=2)
+                ab_mb   = gr.Dropdown(label="Model B", choices=trained_model_names(), value="two_tower", scale=2)
                 ab_topk = gr.Slider(label="Top K", minimum=5, maximum=20, value=10, step=5, scale=2)
                 ab_excl = gr.Checkbox(label="Exclude Seen", value=True, scale=1)
             ab_btn  = gr.Button("🧪 Run A/B Test", variant="primary")
