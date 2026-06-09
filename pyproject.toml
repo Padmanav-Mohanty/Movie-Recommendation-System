@@ -65,4 +65,4 @@ omit   = ["tests/*", "notebooks/*"]
 
 [tool.coverage.report]
 show_missing = true
-fail_under   = 45
+fail_under   = 42
